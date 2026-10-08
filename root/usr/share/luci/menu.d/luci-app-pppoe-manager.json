@@ -1,0 +1,12 @@
+{
+    "admin/services/ppoemanager": {
+        "title": "PPPoE Server",
+        "action": {
+            "type": "view",
+            "path": "ppoemanager/main"
+        },
+        "depends": {
+            "acl": [ "luci-app-pppoe-manager" ]
+        }
+    }
+}

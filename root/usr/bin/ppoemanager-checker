@@ -1,0 +1,37 @@
+#!/bin/sh
+NOW=$(date +%s)
+DB_FILE="/lib/ppp/ppp-users"
+TMP_FILE="/lib/ppp/ppp-users.tmp"
+SECRETS_FILE="/etc/ppp/chap-secrets"
+
+[ ! -f "$DB_FILE" ] && exit 1
+touch "$TMP_FILE"
+echo "PPPoE-Mgr: Running expiry check..."
+
+while IFS='|' read -r expiry username password ip id || [ -n "$expiry" ]; do
+    [ -z "$username" ] && continue
+    CLEAN_USER=$(echo "$username" | sed 's/^#//')
+
+    if [ "$NOW" -gt "$expiry" ]; then
+        echo "PPPoE-Mgr: Terminating expired user: $CLEAN_USER"
+        echo "$username" | grep -q "^#" || username="#$username"
+        echo "$expiry|$username|$password|$ip|$id" >> "$TMP_FILE"
+        grep -q "^$CLEAN_USER\>" "$SECRETS_FILE" && sed -i "s/^$CLEAN_USER\>/#$CLEAN_USER/" "$SECRETS_FILE"
+
+        IFACE=$(ifconfig | grep -B 1 "P-t-P:$ip" | grep "ppp" | awk '{print $1}')
+        [ -z "$IFACE" ] && IFACE=$(ip addr | grep "$ip" | awk '{print $NF}')
+
+        if [ -n "$IFACE" ] && echo "$IFACE" | grep -q "ppp"; then
+            PID=$(ps | grep "pppd" | grep "$IFACE" | grep -v grep | awk '{print $1}')
+            [ -n "$PID" ] && kill -9 "$PID"
+            ifconfig "$IFACE" down 2>/dev/null
+        fi
+    else
+        echo "$username" | grep -q "^#" && username="$CLEAN_USER"
+        echo "$expiry|$username|$password|$ip|$id" >> "$TMP_FILE"
+        grep -q "^#$CLEAN_USER\>" "$SECRETS_FILE" && sed -i "s/^#$CLEAN_USER\>/$CLEAN_USER/" "$SECRETS_FILE"
+    fi
+done < "$DB_FILE"
+
+mv "$TMP_FILE" "$DB_FILE"
+conntrack -F 2>/dev/null

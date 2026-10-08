@@ -1,0 +1,15 @@
+{
+    "luci-app-pppoe-manager": {
+        "description": "PPPoE Server Manager",
+        "read": {
+            "ubus": { "luci.ppoemanager": [ "get_users", "get_online", "get_status" ] },
+            "uci": [ "ppoemanager" ],
+            "file": { "/etc/ppp/chap-secrets": [ "read" ], "/lib/ppp/ppp-users": [ "read" ] }
+        },
+        "write": {
+            "ubus": { "luci.ppoemanager": [ "add_user", "edit_user", "delete_user", "force_offline" ] },
+            "uci": [ "ppoemanager" ],
+            "file": { "/etc/ppp/chap-secrets": [ "write" ], "/lib/ppp/ppp-users": [ "write" ] }
+        }
+    }
+}

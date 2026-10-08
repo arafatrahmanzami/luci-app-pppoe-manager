@@ -1,0 +1,4 @@
+#!/bin/sh
+/etc/init.d/ppoemanager enable
+/etc/init.d/ppoemanager start
+exit 0
