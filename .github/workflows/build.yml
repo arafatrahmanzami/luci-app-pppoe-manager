@@ -67,7 +67,7 @@ jobs:
       - name: Collect IPK
         run: |
           mkdir -p out
-          find sdk/bin/packages -name "*.ipk" -exec cp {} out/ \;
+          find sdk/bin/packages -name "luci-app-pppoe-manager_*.ipk" -exec cp {} out/ \;
           ls -lh out/
 
       - uses: actions/upload-artifact@v4
