@@ -8,53 +8,42 @@ on:
 
 jobs:
   build:
-    name: Build for ${{ matrix.target }}
+    name: Build for ${{ matrix.arch }} (${{ matrix.version }})
     runs-on: ubuntu-latest
     strategy:
       fail-fast: false
       matrix:
         include:
           # OpenWrt 24.10 / ImmortalWrt 24.10 targets (IPK)
-          - target: 'mediatek/filogic'
+          - arch: 'aarch64_cortex-a53'
             version: '24.10.6'
-            suffix: 'ipk'
-          - target: 'x86/64'
+            label: 'imou-hx21'
+          - arch: 'x86_64'
             version: '24.10.6'
-            suffix: 'ipk'
-          - target: 'ramips/mt7621'
+            label: 'x86-64'
+          - arch: 'mipsel_24kc'
             version: '24.10.6'
-            suffix: 'ipk'
-          # OpenWrt 25.12+ targets (APK)
-          - target: 'mediatek/filogic'
-            version: 'SNAPSHOT'
-            suffix: 'apk'
-          - target: 'x86/64'
-            version: 'SNAPSHOT'
-            suffix: 'apk'
+            label: 'ramips-mt7621'
 
     steps:
       - name: Checkout repository
         uses: actions/checkout@v4
-        with:
-          path: luci-app-pppoe-manager
 
       - name: Build package
-        uses: openwrt/gh-action-sdk@main
+        uses: openwrt/gh-action-sdk@v5
         env:
-          ARCH: ${{ matrix.target }}
+          ARCH: ${{ matrix.arch }}
           VERSION: ${{ matrix.version }}
           FEEDNAME: packages_ci
           PACKAGES: luci-app-pppoe-manager
           NO_REFRESH_CHECK: true
 
-      - name: Upload IPK/APK artifacts
+      - name: Upload IPK artifacts
         uses: actions/upload-artifact@v4
         with:
-          name: luci-app-pppoe-manager-${{ matrix.suffix }}-${{ strategy.job-index }}
-          path: |
-            bin/packages/**/*.ipk
-            bin/packages/**/*.apk
-          if-no-files-found: warn
+          name: ipk-${{ matrix.label }}
+          path: bin/packages/**/*.ipk
+          if-no-files-found: error
 
   release:
     name: Create Release
