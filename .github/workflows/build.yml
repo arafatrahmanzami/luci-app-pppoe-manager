@@ -1,71 +1,93 @@
-name: Build and Release
+name: Build IPK via ImmortalWrt SDK
 
 on:
   push:
-    tags:
-      - 'v*'
+    tags: ['v*']
   workflow_dispatch:
 
 jobs:
   build:
-    name: Build for ${{ matrix.arch }} (${{ matrix.version }})
+    name: ${{ matrix.label }}
     runs-on: ubuntu-latest
     strategy:
       fail-fast: false
       matrix:
         include:
-          # OpenWrt 24.10 / ImmortalWrt 24.10 targets (IPK)
-          - arch: 'aarch64_cortex-a53'
-            version: '24.10.6'
-            label: 'imou-hx21'
-          - arch: 'x86_64'
-            version: '24.10.6'
-            label: 'x86-64'
-          - arch: 'mipsel_24kc'
-            version: '24.10.6'
-            label: 'ramips-mt7621'
+          - label: imou-hx21
+            sdk: immortalwrt-sdk-24.10.6-mediatek-filogic_gcc-13.3.0_musl.Linux-x86_64.tar.zst
+            subdir: targets/mediatek/filogic
+          - label: x86-64
+            sdk: immortalwrt-sdk-24.10.6-x86-64_gcc-13.3.0_musl.Linux-x86_64.tar.zst
+            subdir: targets/x86/64
+          - label: ramips-mt7621
+            sdk: immortalwrt-sdk-24.10.6-ramips-mt7621_gcc-13.3.0_musl.Linux-x86_64.tar.zst
+            subdir: targets/ramips/mt7621
 
     steps:
-      - name: Checkout repository
-        uses: actions/checkout@v4
+      - uses: actions/checkout@v4
+        with: { path: src }
 
-      - name: Build package
-        uses: openwrt/gh-action-sdk@v5
-        env:
-          ARCH: ${{ matrix.arch }}
-          VERSION: ${{ matrix.version }}
-          FEEDNAME: packages_ci
-          PACKAGES: luci-app-pppoe-manager
-          NO_REFRESH_CHECK: true
+      - name: Install build deps
+        run: |
+          sudo apt-get update -qq
+          sudo apt-get install -y build-essential libncurses-dev zlib1g-dev gawk \
+            git gettext libssl-dev xsltproc wget unzip python3 time zstd rsync file
 
-      - name: Upload IPK artifacts
-        uses: actions/upload-artifact@v4
+      - name: Download SDK
+        run: |
+          URL="https://downloads.immortalwrt.org/releases/24.10.6/${{ matrix.subdir }}/${{ matrix.sdk }}"
+          echo "Fetching: $URL"
+          wget -q --show-progress -O sdk.tar.zst "$URL"
+          mkdir sdk
+          tar -xf sdk.tar.zst -C sdk --strip-components=1
+
+      - name: Copy package into SDK
+        run: |
+          mkdir -p sdk/package/luci-app-pppoe-manager
+          rsync -a --exclude='.git' --exclude='.github' src/ sdk/package/luci-app-pppoe-manager/
+
+      - name: Feeds update
+        working-directory: sdk
+        run: ./scripts/feeds update -a
+
+      - name: Feeds install
+        working-directory: sdk
+        run: ./scripts/feeds install -a
+
+      - name: Configure
+        working-directory: sdk
+        run: |
+          echo "CONFIG_PACKAGE_luci-app-pppoe-manager=y" >> .config
+          make defconfig
+
+      - name: Compile
+        working-directory: sdk
+        run: make package/luci-app-pppoe-manager/compile V=s
+
+      - name: Collect IPK
+        run: |
+          mkdir -p out
+          find sdk/bin/packages -name "*.ipk" -exec cp {} out/ \;
+          ls -lh out/
+
+      - uses: actions/upload-artifact@v4
         with:
           name: ipk-${{ matrix.label }}
-          path: bin/packages/**/*.ipk
+          path: out/*.ipk
           if-no-files-found: error
 
   release:
-    name: Create Release
     needs: build
     if: startsWith(github.ref, 'refs/tags/')
     runs-on: ubuntu-latest
-    permissions:
-      contents: write
-
+    permissions: { contents: write }
     steps:
-      - name: Download all artifacts
-        uses: actions/download-artifact@v4
+      - uses: actions/download-artifact@v4
+        with: { path: artifacts }
+      - run: find artifacts -type f | sort
+      - uses: softprops/action-gh-release@v2
         with:
-          path: artifacts
-
-      - name: Display structure
-        run: find artifacts -type f | sort
-
-      - name: Create GitHub Release
-        uses: softprops/action-gh-release@v2
-        with:
-          files: artifacts/**/*
+          files: artifacts/**/*.ipk
           generate_release_notes: true
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
