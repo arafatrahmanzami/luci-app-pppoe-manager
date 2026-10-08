@@ -1,0 +1,82 @@
+name: Build and Release
+
+on:
+  push:
+    tags:
+      - 'v*'
+  workflow_dispatch:
+
+jobs:
+  build:
+    name: Build for ${{ matrix.target }}
+    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          # OpenWrt 24.10 / ImmortalWrt 24.10 targets (IPK)
+          - target: 'mediatek/filogic'
+            version: '24.10.6'
+            suffix: 'ipk'
+          - target: 'x86/64'
+            version: '24.10.6'
+            suffix: 'ipk'
+          - target: 'ramips/mt7621'
+            version: '24.10.6'
+            suffix: 'ipk'
+          # OpenWrt 25.12+ targets (APK)
+          - target: 'mediatek/filogic'
+            version: 'SNAPSHOT'
+            suffix: 'apk'
+          - target: 'x86/64'
+            version: 'SNAPSHOT'
+            suffix: 'apk'
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+        with:
+          path: luci-app-pppoe-manager
+
+      - name: Build package
+        uses: openwrt/gh-action-sdk@main
+        env:
+          ARCH: ${{ matrix.target }}
+          VERSION: ${{ matrix.version }}
+          FEEDNAME: packages_ci
+          PACKAGES: luci-app-pppoe-manager
+          NO_REFRESH_CHECK: true
+
+      - name: Upload IPK/APK artifacts
+        uses: actions/upload-artifact@v4
+        with:
+          name: luci-app-pppoe-manager-${{ matrix.suffix }}-${{ strategy.job-index }}
+          path: |
+            bin/packages/**/*.ipk
+            bin/packages/**/*.apk
+          if-no-files-found: warn
+
+  release:
+    name: Create Release
+    needs: build
+    if: startsWith(github.ref, 'refs/tags/')
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+
+    steps:
+      - name: Download all artifacts
+        uses: actions/download-artifact@v4
+        with:
+          path: artifacts
+
+      - name: Display structure
+        run: find artifacts -type f | sort
+
+      - name: Create GitHub Release
+        uses: softprops/action-gh-release@v2
+        with:
+          files: artifacts/**/*
+          generate_release_notes: true
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
