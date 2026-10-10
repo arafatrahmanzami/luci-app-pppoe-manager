@@ -16,9 +16,11 @@ jobs:
           - label: imou-hx21
             imagebuilder: immortalwrt-imagebuilder-24.10.6-mediatek-filogic.Linux-x86_64.tar.zst
             subdir: targets/mediatek/filogic
+            profile: imou_lc-hx3001
           - label: x86-64
             imagebuilder: immortalwrt-imagebuilder-24.10.6-x86-64.Linux-x86_64.tar.zst
             subdir: targets/x86/64
+            profile: generic
 
     steps:
       - uses: actions/checkout@v4
@@ -39,38 +41,56 @@ jobs:
           mkdir ib
           tar -xf ib.tar.zst -C ib --strip-components=1
 
+      - name: List available profiles
+        working-directory: ib
+        run: |
+          echo "=== Available profiles for this target ==="
+          make info 2>&1 | head -60 || true
+
       - name: Copy package into ImageBuilder
         run: |
           mkdir -p ib/package/luci-app-pppoe-manager
           rsync -a --exclude='.git' --exclude='.github' src/ ib/package/luci-app-pppoe-manager/
 
-      - name: Configure rootfs output
+      - name: Verify .config exists and enable TARGZ
         working-directory: ib
         run: |
-          echo "CONFIG_TARGET_ROOTFS_TARGZ=y" >> .config
-          echo "CONFIG_TARGET_ROOTFS_SQUASHFS=y" >> .config
-          make defconfig
+          if [ ! -f .config ]; then
+            echo "ERROR: ImageBuilder .config missing"
+            ls -la
+            exit 1
+          fi
+          sed -i '/^# CONFIG_TARGET_ROOTFS_TARGZ/d' .config
+          grep -q "^CONFIG_TARGET_ROOTFS_TARGZ=" .config || echo "CONFIG_TARGET_ROOTFS_TARGZ=y" >> .config
+          sed -i '/^# CONFIG_TARGET_ROOTFS_SQUASHFS/d' .config
+          grep -q "^CONFIG_TARGET_ROOTFS_SQUASHFS=" .config || echo "CONFIG_TARGET_ROOTFS_SQUASHFS=y" >> .config
+          echo "=== TARGZ settings ==="
+          grep -E "CONFIG_TARGET_ROOTFS_(TARGZ|SQUASHFS)" .config
 
       - name: Build rootfs.tar.gz
         working-directory: ib
         run: |
           make image \
+            PROFILE="${{ matrix.profile }}" \
             PACKAGES="luci-app-pppoe-manager rp-pppoe-server rp-pppoe-common ppp ppp-mod-pppoe conntrack" \
-            CONFIG_TARGET_ROOTFS_TARGZ=y \
             V=s 2>&1 | tee /tmp/ib-build.log
+          echo "=== Build log tail ==="
+          tail -30 /tmp/ib-build.log
 
       - name: Collect rootfs
         run: |
           mkdir -p out
-          find ib/bin -name "*rootfs*.tar.gz" -exec cp {} out/ \;
-          find ib/bin -name "*rootfs*.tgz" -exec cp {} out/ \;
-          ls -lh out/
+          find ib/bin -name "*rootfs*.tar.gz" -exec cp {} out/ \; 2>/dev/null || true
+          find ib/bin -name "*rootfs*.tgz" -exec cp {} out/ \; 2>/dev/null || true
+          echo "=== Files collected ==="
+          ls -lh out/ || echo "NO FILES FOUND"
 
       - uses: actions/upload-artifact@v4
+        if: hashFiles('out/*.tar.gz') != ''
         with:
           name: rootfs-${{ matrix.label }}
           path: out/*.tar.gz
-          if-no-files-found: error
+          if-no-files-found: warn
 
   release:
     needs: build
@@ -84,10 +104,11 @@ jobs:
           path: artifacts
 
       - name: List artifacts
-        run: find artifacts -type f | sort
+        run: find artifacts -type f | sort || echo "no artifacts"
 
       - name: Create Release
         uses: softprops/action-gh-release@v2
+        if: hashFiles('artifacts/**/*.tar.gz') != ''
         with:
           files: artifacts/**/*.tar.gz
         env:

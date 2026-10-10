@@ -14,6 +14,13 @@ Versioning follows [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 - RADIUS authentication backend
 - accel-ppp engine integration
 
+## [1.1.0-r2] — 2026-10-10
+
+### Fixed
+- APK workflow now passes `CONFIG_USE_APK=y` on the make line
+- Rootfs workflow removed non-existent `make defconfig`, added `PROFILE=` argument
+- Version consistency across Makefile, CHANGELOG, README
+
 ## [1.1.0-r1] — 2026-10-10
 
 Consolidated release covering the r3–r7 development iterations.
@@ -81,5 +88,6 @@ Initial public release.
 ---
 
 [Unreleased]: https://github.com/arafatrahmanzami/luci-app-pppoe-manager/compare/v1.1.0...HEAD
+[1.1.0-r2]: https://github.com/arafatrahmanzami/luci-app-pppoe-manager/releases/tag/v1.1.0-r2
 [1.1.0-r1]: https://github.com/arafatrahmanzami/luci-app-pppoe-manager/releases/tag/v1.1.0
 [1.0.0-r2]: https://github.com/arafatrahmanzami/luci-app-pppoe-manager/releases/tag/v1.0.0
