@@ -1,8 +1,8 @@
 include $(TOPDIR)/rules.mk
 
 PKG_NAME:=luci-app-pppoe-manager
-PKG_VERSION:=1.0.0
-PKG_RELEASE:=2
+PKG_VERSION:=1.1.0
+PKG_RELEASE:=1
 
 PKG_MAINTAINER:=Arafat Rahman Zami
 PKG_LICENSE:=Apache-2.0

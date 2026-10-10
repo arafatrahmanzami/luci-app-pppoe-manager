@@ -1,4 +1,9 @@
 #!/bin/sh
-/etc/init.d/ppoemanager enable
-/etc/init.d/ppoemanager start
+# Do NOT auto-start the service. User must enable manually.
+[ -f /etc/config/ppoemanager ] || touch /etc/config/ppoemanager
+[ -f /lib/ppp/ppp-users ] || touch /lib/ppp/ppp-users
+[ -f /etc/ppp/ips ] || echo "192.168.11.10-73" > /etc/ppp/ips
+
+/etc/init.d/rpcd restart 2>/dev/null
+/etc/init.d/uhttpd restart 2>/dev/null
 exit 0
