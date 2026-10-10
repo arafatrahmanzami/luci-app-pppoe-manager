@@ -1,4 +1,4 @@
-name: Build APK (OpenWrt 25.12+)
+name: Build APK (universal)
 
 on:
   push:
@@ -7,26 +7,10 @@ on:
 
 jobs:
   build:
-    name: ${{ matrix.label }}
+    name: Build APK
     runs-on: ubuntu-latest
-    strategy:
-      fail-fast: false
-      matrix:
-        include:
-          - label: imou-hx21
-            sdk: openwrt-sdk-25.12.0-mediatek-filogic_gcc-14.3.0_musl.Linux-x86_64.tar.zst
-            subdir: targets/mediatek/filogic
-          - label: x86-64
-            sdk: openwrt-sdk-25.12.0-x86-64_gcc-14.3.0_musl.Linux-x86_64.tar.zst
-            subdir: targets/x86/64
-          - label: ramips-mt7621
-            sdk: openwrt-sdk-25.12.0-ramips-mt7621_gcc-14.3.0_musl.Linux-x86_64.tar.zst
-            subdir: targets/ramips/mt7621
-
     steps:
       - uses: actions/checkout@v4
-        with:
-          path: src
 
       - name: Install build deps
         run: |
@@ -36,8 +20,7 @@ jobs:
 
       - name: Download SDK
         run: |
-          URL="https://downloads.openwrt.org/releases/25.12.0/${{ matrix.subdir }}/${{ matrix.sdk }}"
-          echo "Fetching: $URL"
+          URL="https://downloads.openwrt.org/releases/25.12.0/targets/mediatek/filogic/openwrt-sdk-25.12.0-mediatek-filogic_gcc-14.3.0_musl.Linux-x86_64.tar.zst"
           wget -q -O sdk.tar.zst "$URL"
           mkdir sdk
           tar -xf sdk.tar.zst -C sdk --strip-components=1
@@ -45,7 +28,7 @@ jobs:
       - name: Copy package into SDK
         run: |
           mkdir -p sdk/package/luci-app-pppoe-manager
-          rsync -a --exclude='.git' --exclude='.github' src/ sdk/package/luci-app-pppoe-manager/
+          rsync -a --exclude='.git' --exclude='.github' ./ sdk/package/luci-app-pppoe-manager/
 
       - name: Feeds update and install
         working-directory: sdk
@@ -64,19 +47,19 @@ jobs:
         working-directory: sdk
         run: make CONFIG_USE_APK=y package/luci-app-pppoe-manager/compile V=s
 
-      - name: Collect APK (rename with label)
+      - name: Collect APK (universal name)
         run: |
           mkdir -p out
-          find sdk/bin -name "luci-app-pppoe-manager*.apk" -exec cp {} out/ \;
-          cd out
-          for f in *.apk; do
-            mv "$f" "${f%.apk}-${{ matrix.label }}.apk"
-          done
-          ls -lh
+          APK=$(find sdk/bin -name "luci-app-pppoe-manager*.apk" | head -1)
+          echo "Found: $APK"
+          VER=$(basename "$APK" | sed 's/luci-app-pppoe-manager-\(.*\)\.apk/\1/')
+          echo "Version: $VER"
+          cp "$APK" "out/luci-app-pppoe-manager-${VER}.apk"
+          ls -lh out/
 
       - uses: actions/upload-artifact@v4
         with:
-          name: apk-${{ matrix.label }}
+          name: apk
           path: out/*.apk
           if-no-files-found: error
 

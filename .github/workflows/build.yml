@@ -1,4 +1,4 @@
-name: Build IPK via ImmortalWrt SDK
+name: Build IPK (universal)
 
 on:
   push:
@@ -7,26 +7,10 @@ on:
 
 jobs:
   build:
-    name: ${{ matrix.label }}
+    name: Build IPK
     runs-on: ubuntu-latest
-    strategy:
-      fail-fast: false
-      matrix:
-        include:
-          - label: imou-hx21
-            sdk: immortalwrt-sdk-24.10.6-mediatek-filogic_gcc-13.3.0_musl.Linux-x86_64.tar.zst
-            subdir: targets/mediatek/filogic
-          - label: x86-64
-            sdk: immortalwrt-sdk-24.10.6-x86-64_gcc-13.3.0_musl.Linux-x86_64.tar.zst
-            subdir: targets/x86/64
-          - label: ramips-mt7621
-            sdk: immortalwrt-sdk-24.10.6-ramips-mt7621_gcc-13.3.0_musl.Linux-x86_64.tar.zst
-            subdir: targets/ramips/mt7621
-
     steps:
       - uses: actions/checkout@v4
-        with:
-          path: src
 
       - name: Install build deps
         run: |
@@ -36,8 +20,7 @@ jobs:
 
       - name: Download SDK
         run: |
-          URL="https://downloads.immortalwrt.org/releases/24.10.6/${{ matrix.subdir }}/${{ matrix.sdk }}"
-          echo "Fetching: $URL"
+          URL="https://downloads.immortalwrt.org/releases/24.10.6/targets/mediatek/filogic/immortalwrt-sdk-24.10.6-mediatek-filogic_gcc-13.3.0_musl.Linux-x86_64.tar.zst"
           wget -q -O sdk.tar.zst "$URL"
           mkdir sdk
           tar -xf sdk.tar.zst -C sdk --strip-components=1
@@ -45,7 +28,7 @@ jobs:
       - name: Copy package into SDK
         run: |
           mkdir -p sdk/package/luci-app-pppoe-manager
-          rsync -a --exclude='.git' --exclude='.github' src/ sdk/package/luci-app-pppoe-manager/
+          rsync -a --exclude='.git' --exclude='.github' ./ sdk/package/luci-app-pppoe-manager/
 
       - name: Feeds update and install
         working-directory: sdk
@@ -63,19 +46,19 @@ jobs:
         working-directory: sdk
         run: make package/luci-app-pppoe-manager/compile V=s
 
-      - name: Collect IPK (rename with label)
+      - name: Collect IPK (universal name)
         run: |
           mkdir -p out
-          find sdk/bin/packages -name "luci-app-pppoe-manager_*.ipk" -exec cp {} out/ \;
-          cd out
-          for f in *.ipk; do
-            mv "$f" "${f%.ipk}-${{ matrix.label }}.ipk"
-          done
-          ls -lh
+          IPK=$(find sdk/bin/packages -name "luci-app-pppoe-manager_*.ipk" | head -1)
+          echo "Found: $IPK"
+          VER=$(basename "$IPK" | sed 's/luci-app-pppoe-manager_\(.*\)_all\.ipk/\1/')
+          echo "Version: $VER"
+          cp "$IPK" "out/luci-app-pppoe-manager_${VER}_all.ipk"
+          ls -lh out/
 
       - uses: actions/upload-artifact@v4
         with:
-          name: ipk-${{ matrix.label }}
+          name: ipk
           path: out/*.ipk
           if-no-files-found: error
 
