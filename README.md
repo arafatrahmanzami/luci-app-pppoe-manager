@@ -2,17 +2,17 @@
 
 # luci-app-pppoe-manager
 
-A modern PPPoE Server Manager for OpenWrt / ImmortalWrt — a lightweight LuCI (OpenWrt's web-based configuration User Interface) application that manages the Roaring Penguin PPPoE server (`rp-pppoe-server`) with an easy-to-use web interface, per-user expiration dates, automatic account blocking, live online session monitoring, and one-click disconnection.
+A modern PPPoE Server Manager for OpenWrt / ImmortalWrt — a lightweight LuCI (OpenWrt's web-based configuration User Interface) application that runs a PPPoE Access Concentrator with an easy-to-use web interface, per-user expiration dates, automatic account blocking, live online session monitoring, one-click firewall setup, and MikroTik-style advanced controls.
 
 **Release:** `1.1.0-r5` — 2026-10-10 — by [@arafatrahmanzami](https://github.com/arafatrahmanzami)
 
-Built on top of `rp-pppoe-server` + `ppp` + `nftables`/`iptables` firewall, with a modern LuCI JavaScript UI. Tested on ImmortalWrt 24.10 (MediaTek Filogic / IMOU HX21, aarch64).
+Built on top of `rp-pppoe-server` + `ppp` + `nftables`/`iptables` firewall, with a modern LuCI JavaScript UI. Tested on ImmortalWrt 24.10.6 (MediaTek Filogic / IMOU LC-HX3001, aarch64).
 
 ---
 
 ## What does this actually do?
 
-Imagine you want your OpenWrt/ImmortalWrt router to act like a **mini ISP** — accepting PPPoE dial-in connections from clients (Windows PCs, other routers, IoT devices) and giving each one a username, password, IP address, and expiration date.
+Imagine you want your OpenWrt / ImmortalWrt router to act like a **mini ISP** — accepting PPPoE dial-in connections from clients (Windows PCs, other routers, IoT devices) and giving each one a username, password, IP address, and expiration date.
 
 **You need this if:**
 
@@ -39,17 +39,18 @@ Imagine you want your OpenWrt/ImmortalWrt router to act like a **mini ISP** — 
 - [Before You Start](#before-you-start)
 - [Installation](#installation)
 - [After Installation](#after-installation)
-- [Configuration](#configuration)
-- [Users Manager Tab](#users-manager-tab)
-- [Online Users Tab](#online-users-tab)
-- [General Settings Tab](#general-settings-tab)
-- [MWAN3 Conflict Resolution](#mwan3-conflict-resolution)
-- [Flow Offloading Management](#flow-offloading-management)
+- [Quick Start](#quick-start)
+- [The Five Tabs](#the-five-tabs)
+- [Firewall Setup Explained](#firewall-setup-explained)
+- [Users Manager](#users-manager)
+- [Online Users](#online-users)
+- [Advanced Settings](#advanced-settings)
+- [Help Tab](#help-tab)
 - [Automatic Expiration Enforcement](#automatic-expiration-enforcement)
 - [Common Use Cases](#common-use-cases)
 - [Troubleshooting](#troubleshooting)
 - [Changelog](#changelog)
-- [Compile from Source (OpenWrt SDK)](#compile-from-source-openwrt-sdk)
+- [Compile from Source](#compile-from-source-openwrt-sdk)
 - [Credits](#credits)
 - [Glossary](#glossary)
 - [License](#license)
@@ -69,29 +70,53 @@ Existing OpenWrt PPPoE server tools fall into two categories:
 - ✅ Complete user management with **expiration dates**
 - ✅ Automatic **session termination** when an account expires
 - ✅ **Live online users** dashboard with **force-disconnect**
+- ✅ **One-click firewall setup** with automatic backup and restore
 - ✅ **MWAN3 coordination** — automatically disables mwan3 when the PPPoE server is running (the two conflict)
 - ✅ **Flow offloading coordination** — safely enables software offloading when possible
 - ✅ **Modern JavaScript LuCI UI** — not the legacy Lua interface
+- ✅ **Extensive Help tab** — 13 collapsible documentation sections built into the UI
 
 ---
 
 ## Key Features
 
-- **Users Manager** — add, edit, delete PPPoE accounts from the web UI
-- **Per-user expiration** — set a date; the account auto-blocks when expired
-- **Active/Expired status** — see at a glance which accounts are usable
-- **Static or auto-assigned IP** — bind a user to a specific IP, or let the server pick from the pool
-- **Online Users dashboard** — live list of connected sessions: username, client IP, MAC, server IP, session duration
-- **Force Offline button** — kick any user with one click
-- **Real-time polling** — online users table refreshes every 10 seconds
-- **General Settings tab** — configure interface, IP pool, DNS, MSS, timeouts, service names, AC name
-- **MWAN3 auto-coordination** — automatically disables the mwan3 daemon when the PPPoE server starts, re-enables it when stopped
-- **Flow offloading management** — software offloading by default (safe with conntrack fix), hardware offloading optional
-- **mwan3 conntrack fix** — optional `/etc/mwan3.user` hook to flush dead flows on failover
-- **Automatic expiration checker** — runs via cron hourly, or via `rc.local` at boot
-- **Modern LuCI JS UI** — tabbed interface, real-time tables, clean layout
-- **Universal architecture** — `PKG_ARCH=all`, works on every router CPU (x86, MIPS, ARM, AArch64, RISC-V)
-- **opkg and apk support** — builds for both OpenWrt ≤ 24.10 (`opkg`) and ≥ 25.12 (`apk`)
+**Server Management**
+- Five-tab interface: General Settings, Users Manager, Online Users, Advanced, Help
+- Modern JavaScript UI with tab persistence (`localStorage`)
+- Config validation — warns on subnet conflicts
+- Universal architecture (`PKG_ARCH=all`) — runs on every OpenWrt CPU
+
+**User Management**
+- Add, edit, delete PPPoE accounts from the web UI
+- Per-user expiration dates with automatic blocking
+- Optional static IP binding or auto-assign from pool
+- Active / Expired status display
+- Duplicate username protection
+
+**Session Monitoring**
+- Live list of connected sessions: username, client IP, MAC, server IP, duration
+- **Force Offline** button to disconnect any session
+- Auto-refresh every 5 seconds
+- Kernel-sourced peer IP (accurate, not from stale cmdline)
+
+**Firewall Automation**
+- "Show Preview" button — displays exact `uci` commands before applying
+- "Apply Firewall Setup" — creates zone `pppoe`, enables masquerade, adds forwarding to WAN
+- "Restore from Backup" — lists all backups and restores any one
+- Automatic backup to `/etc/config/firewall.bak-ppoemanager-<timestamp>` before every change
+
+**Advanced Controls**
+- Auto-manage mwan3 (disable when PPPoE server runs, re-enable when stopped)
+- Flow offloading mode: software / hardware / auto
+- mwan3 conntrack fix via `/etc/mwan3.user` hook
+- Low-level PPPoE flags: randomize sessions, custom options file, session offset, first session unit, synchronous PPP
+
+**Automation**
+- `ppoemanager-checker` — hourly expiration enforcement
+- Blocks expired accounts with `#` prefix in both `chap-secrets` and `ppp-users`
+- Kills active PPP sessions for expired users
+- Flushes conntrack entries
+- Auto-unblocks renewed accounts
 
 ---
 
@@ -130,9 +155,9 @@ Answer these questions **before** installing:
 
 ```sh
 cd /tmp
-wget https://github.com/arafatrahmanzami/luci-app-pppoe-manager/releases/download/v1.0.0/luci-app-pppoe-manager_1.0.0-r2_all.ipk
+wget https://github.com/arafatrahmanzami/luci-app-pppoe-manager/releases/download/v1.1.0-r5/luci-app-pppoe-manager_1.1.0-r5_all.ipk
 opkg update
-opkg install luci-app-pppoe-manager_1.0.0-r2_all.ipk
+opkg install luci-app-pppoe-manager_1.1.0-r5_all.ipk
 rm -f /tmp/luci-indexcache /tmp/luci-modulecache/*
 /etc/init.d/rpcd restart
 /etc/init.d/uhttpd restart
@@ -142,8 +167,8 @@ rm -f /tmp/luci-indexcache /tmp/luci-modulecache/*
 
 ```sh
 cd /tmp
-wget https://github.com/arafatrahmanzami/luci-app-pppoe-manager/releases/download/v1.0.0/luci-app-pppoe-manager-1.0.0-r2.apk
-apk add --allow-untrusted luci-app-pppoe-manager-1.0.0-r2.apk
+wget https://github.com/arafatrahmanzami/luci-app-pppoe-manager/releases/download/v1.1.0-r5/luci-app-pppoe-manager-1.1.0-r5.apk
+apk add --allow-untrusted luci-app-pppoe-manager-1.1.0-r5.apk
 rm -f /tmp/luci-indexcache /tmp/luci-modulecache/*
 /etc/init.d/rpcd restart
 /etc/init.d/uhttpd restart
@@ -155,19 +180,43 @@ rm -f /tmp/luci-indexcache /tmp/luci-modulecache/*
 cd /tmp && \
 if command -v apk >/dev/null 2>&1; then \
   echo "Detected apk — OpenWrt 25.12+" && \
-  wget -O pppoe.pkg https://github.com/arafatrahmanzami/luci-app-pppoe-manager/releases/download/v1.0.0/luci-app-pppoe-manager-1.0.0-r2.apk && \
+  wget -O pppoe.pkg https://github.com/arafatrahmanzami/luci-app-pppoe-manager/releases/download/v1.1.0-r5/luci-app-pppoe-manager-1.1.0-r5.apk && \
   apk add --allow-untrusted pppoe.pkg; \
 else \
   echo "Detected opkg — OpenWrt 24.10 or older" && \
   opkg update && \
-  wget -O pppoe.pkg https://github.com/arafatrahmanzami/luci-app-pppoe-manager/releases/download/v1.0.0/luci-app-pppoe-manager_1.0.0-r2_all.ipk && \
+  wget -O pppoe.pkg https://github.com/arafatrahmanzami/luci-app-pppoe-manager/releases/download/v1.1.0-r5/luci-app-pppoe-manager_1.1.0-r5_all.ipk && \
   opkg install pppoe.pkg; \
 fi && \
 rm -f /tmp/luci-indexcache /tmp/luci-modulecache/* && \
 /etc/init.d/rpcd restart && /etc/init.d/uhttpd restart
 ```
 
-### Method 3 — Upload via LuCI
+### Method 3 — Full install tarball (no package manager)
+
+The `-full.tar.gz` contains all files at their target paths. Extract directly to `/`:
+
+```sh
+cd /tmp
+wget https://github.com/arafatrahmanzami/luci-app-pppoe-manager/releases/download/v1.1.0-r5/luci-app-pppoe-manager-1.1.0-r5-full.tar.gz
+cd / && tar xzf /tmp/luci-app-pppoe-manager-1.1.0-r5-full.tar.gz
+chmod +x /etc/init.d/ppoemanager /usr/bin/ppoemanager-checker /usr/bin/ppoemanager-control
+/etc/init.d/rpcd restart
+/etc/init.d/uhttpd restart
+```
+
+### Method 4 — Rootfs tarball (for IMOU LC-HX3001)
+
+Pre-built rootfs with the app installed:
+
+```sh
+cd /tmp
+wget https://github.com/arafatrahmanzami/luci-app-pppoe-manager/releases/download/v1.1.0-r5/luci-app-pppoe-manager-rootfs-r5.tar.gz
+```
+
+This is a complete root filesystem — for advanced users or image builders only.
+
+### Method 5 — Upload via LuCI
 
 1. Download the `.ipk` or `.apk` from the releases page
 2. Open LuCI → **System → Software**
@@ -175,14 +224,14 @@ rm -f /tmp/luci-indexcache /tmp/luci-modulecache/* && \
 4. Select the file, click **Install**
 5. Hard-refresh the browser (**Ctrl+Shift+R**)
 
-### Method 4 — Build from source
+### Method 6 — Build from source
 
 See [Compile from Source](#compile-from-source-openwrt-sdk) below.
 
 ### Source code
 
-- [Download `.zip`](https://github.com/arafatrahmanzami/luci-app-pppoe-manager/archive/refs/tags/v1.0.0.zip)
-- [Download `.tar.gz`](https://github.com/arafatrahmanzami/luci-app-pppoe-manager/archive/refs/tags/v1.0.0.tar.gz)
+- [Download `.zip`](https://github.com/arafatrahmanzami/luci-app-pppoe-manager/archive/refs/tags/v1.1.0-r5.zip)
+- [Download `.tar.gz`](https://github.com/arafatrahmanzami/luci-app-pppoe-manager/archive/refs/tags/v1.1.0-r5.tar.gz)
 
 ---
 
@@ -190,16 +239,16 @@ See [Compile from Source](#compile-from-source-openwrt-sdk) below.
 
 1. Open LuCI: `http://<router-ip>/cgi-bin/luci/`
 2. Go to **Services → PPPoE Server**
-3. You should see three tabs: **Users Manager**, **Online Users**, **General Settings**
+3. You should see **five tabs**: General Settings, Users Manager, Online Users, Advanced, Help
 4. If the menu doesn't appear, hard-refresh: **Ctrl+Shift+R**
 
 **What gets installed:**
 
 | Path | Purpose |
-|---|---|
+|------|---------|
 | `/etc/config/ppoemanager` | UCI configuration |
 | `/etc/init.d/ppoemanager` | Init script (procd) |
-| `/etc/uci-defaults/99-ppoemanager` | First-run setup (enables service) |
+| `/etc/uci-defaults/99-ppoemanager` | First-run setup |
 | `/usr/bin/ppoemanager-checker` | Expiration enforcement script |
 | `/usr/bin/ppoemanager-control` | MWAN3 / offload coordination |
 | `/usr/share/rpcd/ucode/ppoemanager.uc` | RPC backend |
@@ -209,152 +258,197 @@ See [Compile from Source](#compile-from-source-openwrt-sdk) below.
 
 ---
 
-## Configuration
+## Quick Start
 
-The UCI config lives at `/etc/config/ppoemanager`. Two sections:
+**10-step first-time setup:**
 
-### `pppoe_server` — server settings
-
-| Option | Default | Description |
-|---|---|---|
-| `enabled` | `1` | Enable/disable the server |
-| `interface` | `lan` | Interface to listen on (from `network` UCI) |
-| `ac_name` | `access-concentrator-name` | Access Concentrator name |
-| `service_name` | `service-name1`, `service-name2` | Service names advertised |
-| `maxsessionsperpeer` | `1` | Max sessions per MAC address |
-| `localip` | `192.168.11.1` | Server's IP on the PPPoE subnet |
-| `firstremoteip` | `192.168.11.11` | First client IP in the pool |
-| `maxsessions` | `32` | Max concurrent clients |
-| `optionsfile` | `/etc/ppp/pppoe-server-options` | Path to pppd options file |
-| `randomsession` | `0` | Randomize session IDs |
-| `timeout` | `60` | Session inactivity timeout (seconds) |
-| `mss` | `1468` | MSS clamping |
-
-### `coordination` — integration with other services
-
-| Option | Default | Description |
-|---|---|---|
-| `manage_mwan3` | `1` | Auto-disable mwan3 while PPPoE server runs |
-| `manage_offloading` | `1` | Auto-manage firewall flow offloading |
-| `offload_mode` | `software` | `software` / `hardware` / `auto` |
-| `conntrack_flush_on_failover` | `1` | Install `/etc/mwan3.user` conntrack hook |
-
-### Edit via SSH
-
-```sh
-uci set ppoemanager.server.localip='192.168.11.1'
-uci set ppoemanager.server.firstremoteip='192.168.11.11'
-uci set ppoemanager.server.maxsessions='64'
-uci commit ppoemanager
-/etc/init.d/ppoemanager restart
-```
+1. **Pick a separate subnet** — e.g., `192.168.12.0/24` (not your main LAN subnet)
+2. **Create a network interface** for the PPPoE subnet (Network → Interfaces → Add new interface, e.g. `br-pppoe` or a VLAN)
+3. **Open this app** — Services → PPPoE Server
+4. **Select the interface** you created in step 2
+5. **Set Server IP** to the interface's IP (e.g., `192.168.12.1`)
+6. **Set First Client IP** to the first free IP in that subnet (e.g., `192.168.12.11`)
+7. **Click "Apply Firewall Setup"** at the bottom — creates the firewall zone and enables masquerade
+8. **Go to Users Manager** and click **Add User** to create credentials
+9. **Come back to General Settings** and click **Save & Apply** to start the server
+10. **Connect a client** with the credentials — it will appear in Online Users
 
 ---
 
-## Users Manager Tab
+## The Five Tabs
 
-The primary tab. A table lists every PPPoE account with: index, expiration date, username, password (visible), IP address, status (**Active** / **Expired**), and action buttons.
+### 1. General Settings
 
-**Add User:**
-1. Click **Add User**
-2. Enter username, password, static IP (optional — leave blank for auto), and expiration date
-3. Click **Add**
+Basic server configuration plus the Firewall Setup section.
 
-**Edit User:** Click the **Edit** button on a row, change fields, click **Save**.
+| Field | What it does |
+|-------|--------------|
+| Enable Server | Turn the PPPoE server on or off |
+| Interface | UCI interface the server listens on |
+| AC Name | Access Concentrator name (cosmetic) |
+| Service Names | Labels advertised to clients |
+| Server IP | Server's own IP on the PPP link |
+| First Client IP | First address in the client pool |
+| Max Sessions | Maximum concurrent clients |
+| Max Sessions per Peer | Per-MAC limit |
+| Primary DNS | DNS server 1 pushed to clients |
+| Secondary DNS | DNS server 2 pushed to clients |
+| MTU | Maximum Transmission Unit (standard: 1492) |
+| MRU | Maximum Receive Unit (standard: 1492) |
+| MSS (clamp) | Maximum Segment Size (standard: 1468) |
+| Idle Timeout | Disconnect idle clients after N seconds |
 
-**Delete User:** Click the **Delete** button, confirm.
+### 2. Users Manager
 
-The data lives in `/lib/ppp/ppp-users`, one line per user:
+Table of all PPPoE accounts with **Add / Edit / Delete** and expiration dates.
 
-```
-<expiry_unix_timestamp>|<username>|<password>|<assigned_ip>|<id>
-```
+Accounts live in `/lib/ppp/ppp-users` (with expiration) and `/etc/ppp/chap-secrets` (credentials).
 
-Active users are written as-is. Expired/blocked users are prefixed with `#`:
+### 3. Online Users
 
-```
-1767225600|proxmoxpf sense|pf sense|192.168.11.11|11
-#1767225600|testuser|testpass|192.168.11.12|12   ← blocked
-```
-
----
-
-## Online Users Tab
-
-Shows active PPPoE sessions in real time. Columns:
+Live list of connected sessions:
 
 | Column | Meaning |
-|---|---|
-| **No.** | Row number |
-| **User** | Username (looked up from `/etc/ppp/chap-secrets` by IP) |
-| **Client IP** | The IP assigned to this session |
-| **MAC** | The client's MAC address |
-| **Server IP** | Your server's IP for this session |
-| **Duration** | How long the session has been up |
-| **Actions** | **Force Offline** button |
+|--------|---------|
+| User | Username (from chap-secrets by IP) |
+| Client IP | The peer address assigned via IPCP |
+| MAC | Client's Ethernet address |
+| Server IP | Your router's address on that session |
+| Duration | How long the session has been up |
+| Actions | **Force Offline** button |
 
-**Force Offline:** kills the `pppd` process for that session. The client is disconnected immediately.
+Auto-refreshes every 5 seconds.
 
-The table refreshes automatically every 10 seconds.
+### 4. Advanced
 
----
+Multi-WAN and low-level settings — see [Advanced Settings](#advanced-settings).
 
-## General Settings Tab
+### 5. Help
 
-**Server Configuration** — edit all the server options listed above.
-
-**Advanced Coordination** — MWAN3, flow offloading, and conntrack flush settings. See the next two sections.
+Built-in documentation with 13 collapsible sections:
+Overview, Quick Start, Five Tabs, Server Configuration, Firewall Setup, Users Manager, Online Users, Advanced Settings, Files & Locations, Command Reference, Troubleshooting, Glossary, Credits.
 
 ---
 
-## MWAN3 Conflict Resolution
+## Firewall Setup Explained
 
-**MWAN3 and the PPPoE server cannot coexist.** This is a documented OpenWrt limitation:
+PPPoE clients connect to your router, but they cannot reach the internet by default — the firewall blocks them.
 
-- MWAN3 tags every packet with a firewall mark (`fwmark`) for policy routing
-- PPPoE encapsulation interferes with mark preservation
-- Running both causes PPPoE clients to lose connectivity, mwan3 tracking to break, and sessions to drop randomly
+The **"Apply Firewall Setup"** button performs these changes:
 
-**What this app does:**
+```
+uci set firewall.pppoe=zone              # create a new zone
+uci set firewall.pppoe.name='pppoe'        # name it "pppoe"
+uci set firewall.pppoe.input='ACCEPT'      # allow client → router
+uci set firewall.pppoe.output='ACCEPT'     # allow router → client
+uci set firewall.pppoe.forward='ACCEPT'    # allow client → internet
+uci set firewall.pppoe.masq='1'             # enable NAT/masquerade
+uci add_list firewall.pppoe.device='ppp+'  # match all pppX interfaces
+uci add firewall forwarding                # add a forwarding rule
+uci set firewall.@forwarding[-1].src='pppoe'
+uci set firewall.@forwarding[-1].dest='wan'
+uci commit firewall
+/etc/init.d/firewall reload
+```
 
-- When the PPPoE server starts (`ppoemanager-control start`), it **automatically disables mwan3**
-- When the server stops, mwan3 is re-enabled
-- The `manage_mwan3` UCI option controls this (default: `on`)
-
-The `ppoemanager-control` script is called by the init script. The mutual exclusion is **mandatory** — you cannot run both simultaneously.
+**Safety features:**
+- Before any change, `/etc/config/firewall` is backed up to `/etc/config/firewall.bak-ppoemanager-<timestamp>`
+- "Show Preview" displays the exact commands before they run
+- "Restore from Backup" lists all backups and restores any one
 
 ---
 
-## Flow Offloading Management
+## Users Manager
 
-Software flow offloading is a kernel feature that speeds up forwarding by bypassing the full netfilter chain for established flows. It's safe to use with PPPoE **as long as MWAN3 is disabled**.
+Each PPPoE user is stored in two places:
 
-**Modes:**
+- `/lib/ppp/ppp-users` — database with expiration: `expiry|username|password|ip|id`
+- `/etc/ppp/chap-secrets` — credentials read by the PPP daemon
 
-| Mode | Behavior |
-|---|---|
-| `software` | Enables `flow_offloading=1`, `flow_offloading_hw=0`. Safe with mwan3 failover (with conntrack fix). **Recommended.** |
-| `hardware` | Enables both. Fastest, but **incompatible with mwan3**. Use only on single-WAN setups. |
-| `auto` | Tries hardware first, falls back to software. |
+### Expiration Enforcement
 
-**The mwan3 conntrack fix:** an optional hook at `/etc/mwan3.user` that flushes conntrack entries on failover, preventing hung connections when offloading is enabled. Enable via `conntrack_flush_on_failover='1'`.
+The `ppoemanager-checker` script runs every hour (via cron). For each user whose expiration date has passed, it:
+
+1. Prefixes the username with `#` in both files (blocking the account)
+2. Kills any active PPP session for that user
+3. Flushes conntrack entries so no packets slip through
+
+To renew a user: just change the expiration date in the UI. The next hourly run will unblock the account automatically.
+
+### Static vs Auto IP
+
+- **Leave the Static IP field blank** — server assigns the next free IP from the pool
+- **Enter a specific IP** — pins the account to that address
+
+⚠️ **Warning:** Two users with the same static IP will conflict. Only one can connect at a time.
+
+---
+
+## Online Users
+
+Shows every currently-connected PPPoE client with:
+
+- **Username** — looked up from chap-secrets by client IP
+- **Client IP** — the peer address assigned via IPCP
+- **MAC** — the client's Ethernet address
+- **Server IP** — your router's address on that session
+- **Duration** — how long the session has been up
+
+### Force Offline
+
+Sends `SIGKILL` to the `pppd` process for that session. The client is disconnected immediately. Useful for kicking abusive clients or forcing re-authentication.
+
+---
+
+## Advanced Settings
+
+### Multi-WAN & Offload Coordination
+
+**Auto-manage mwan3:** MWAN3 and PPPoE server cannot coexist — mwan3 uses firewall marks (fwmark) that interfere with PPPoE encapsulation. When enabled, this option disables mwan3 while the PPPoE server runs, then re-enables it when you stop the server.
+
+**Auto-manage flow offloading:** Software flow offloading speeds up forwarding by bypassing the full netfilter chain. Safe with PPPoE, but only when mwan3 is off. Hardware flow offloading is fastest but incompatible with mwan3.
+
+**mwan3 conntrack fix:** Installs `/etc/mwan3.user` — a hook that flushes dead conntrack entries on mwan3 failover. Prevents hung connections when offloading is enabled.
+
+### Low-Level Server Flags
+
+**Randomize Sessions:** Randomizes PPPoE session IDs (rarely needed).
+
+**Options File:** Path to the pppd options file (default `/etc/ppp/pppoe-server-options`).
+
+**Session Offset:** Starting offset for session IDs.
+
+**First Session Unit:** First `pppX` unit number assigned.
+
+**Synchronous PPP:** Use synchronous PPP (rarely needed).
+
+---
+
+## Help Tab
+
+The Help tab contains **13 collapsible documentation sections**:
+
+1. Overview — What This App Does
+2. Quick Start — First-Time Setup
+3. The Five Tabs Explained
+4. Server Configuration — Every Field Explained
+5. Firewall Setup — What It Does and Why
+6. Users Manager — How Accounts Work
+7. Online Users — Live Session Monitoring
+8. Advanced Settings — When to Touch Them
+9. Files & Locations — Complete Reference
+10. Command Reference — Useful SSH Commands
+11. Troubleshooting — Common Issues
+12. Glossary of Terms
+13. Credits
+
+Each section is collapsed by default. Click to expand.
 
 ---
 
 ## Automatic Expiration Enforcement
 
-The `ppoemanager-checker` script runs **every hour** via cron (or on boot via `rc.local`). It:
-
-1. Reads `/lib/ppp/ppp-users`
-2. For each expired user:
-   - Prefixes the username with `#` in the database
-   - Comments out the user in `/etc/ppp/chap-secrets`
-   - Kills the active `pppd` process for that user (session terminated)
-3. For each renewed user (expiry date moved to future):
-   - Removes the `#` prefix from both files
-   - User can log in again
-
-**Add to cron (already done by `ppoemanager-control start`):**
+Add to cron (already done by `ppoemanager-control start`):
 
 ```sh
 # /etc/crontabs/root
@@ -370,7 +464,7 @@ The `ppoemanager-checker` script runs **every hour** via cron (or on boot via `r
 
 ### 1. Small ISP / neighborhood sharing
 
-- Configure server on `br-lan`
+- Configure server on a dedicated interface
 - Assign each client a static IP + expiration date
 - Bill monthly; the checker blocks users automatically when they don't pay
 
@@ -396,7 +490,7 @@ The `ppoemanager-checker` script runs **every hour** via cron (or on boot via `r
 
 ## Troubleshooting
 
-### The menu doesn't appear
+### Menu doesn't appear after install
 
 ```sh
 rm -f /tmp/luci-indexcache /tmp/luci-modulecache/*
@@ -404,11 +498,11 @@ rm -f /tmp/luci-indexcache /tmp/luci-modulecache/*
 /etc/init.d/uhttpd restart
 ```
 
-Then hard-refresh the browser (**Ctrl+Shift+R**).
+Then hard-refresh the browser (Ctrl+Shift+R).
 
-### "Entry not found" when I run uci show ppoemanager
+### "Entry not found" when I run `uci show ppoemanager`
 
-This means the UCI file was created but never loaded. Fix:
+The UCI file exists but was never loaded. Fix:
 
 ```sh
 uci import ppoemanager < /etc/config/ppoemanager
@@ -416,18 +510,30 @@ uci commit ppoemanager
 /etc/init.d/ppoemanager restart
 ```
 
-### Users get 0.0.0.0 as their gateway
+### Clients get 0.0.0.0 as their gateway
 
-The `defaultroute` option is missing from `/etc/ppp/pppoe-server-options`. Add it:
+The `defaultroute` option is missing from `/etc/ppp/pppoe-server-options`:
 
 ```sh
 echo "defaultroute" >> /etc/ppp/pppoe-server-options
 /etc/init.d/ppoemanager restart
 ```
 
-### Users can't reach the internet
+### Clients connect but have no internet
 
-Check masquerade is enabled for the PPPoE subnet. In LuCI: **Network → Firewall → Zones** — the zone with `ppp+` device must have **Masquerading** enabled.
+Click **"Apply Firewall Setup"** in General Settings. Verify with:
+
+```sh
+uci show firewall | grep -A 5 pppoe
+```
+
+### Online Users tab is empty
+
+The client just connected — wait up to 5 seconds for the next poll. If still empty:
+
+```sh
+ubus call luci.ppoemanager get_online
+```
 
 ### MWAN3 conflicts
 
@@ -454,15 +560,9 @@ If empty:
 ubus list | grep ppoemanager
 ```
 
-### The service runs but no clients can connect
-
-- Verify the interface (`br-lan`) is up: `ip link show br-lan`
-- Check firewall allows PPPoE discovery: `nft list ruleset | grep -i pppoe`
-- Look at logs: `logread | grep ppp`
-
 ### Sessions drop every few minutes
 
-LCP echo timeout is too aggressive. In `/etc/ppp/pppoe-server-options`:
+LCP echo timeout too aggressive. Edit `/etc/ppp/pppoe-server-options`:
 
 ```
 lcp-echo-interval 20
@@ -471,49 +571,24 @@ lcp-echo-failure 5
 
 Then `/etc/init.d/ppoemanager restart`.
 
+### Two users with same static IP
+
+They conflict. Only one can connect at a time. Edit each user and assign unique IPs.
+
 ---
 
 ## Changelog
 
-### [1.0.0-r2] — 2026-10-08
+See [CHANGELOG.md](CHANGELOG.md) for the full history.
 
-**Initial release**
+### [1.1.0-r5] — 2026-10-10 — First stable release
 
-**Added**
-
-- Users Manager tab with add/edit/delete
-- Expiration date per user
-- Automatic blocking of expired accounts via `ppoemanager-checker`
-- Online Users tab with live session list
-- Force Offline button to kill sessions
-- Real-time polling (10s interval) on Online Users
-- General Settings tab for all server options
-- Advanced Coordination section: MWAN3 + flow offloading + conntrack fix
-- `ppoemanager-control` script for MWAN3/offload coordination
-- UCI config shipped in the package (`/etc/config/ppoemanager`)
-- procd-based init script
-- ucode RPC backend (`luci.ppoemanager`)
-- Menu entry under Services
-- ACL permissions for ubus + uci
-
-**Fixed**
-
-- UCI config now ships in package (was previously created via broken `uci batch` in uci-defaults)
-- Menu JSON no longer requires `uci: ppoemanager: true` (was causing silent menu hides)
-- Conffiles list now only includes files we own (was triggering build warnings for `rp-pppoe-server` files)
-- postinst script restarts rpcd/uhttpd so menu appears immediately
-
-**Technical**
-
-- Multi-architecture CI build via ImmortalWrt SDK
-- Tested on ImmortalWrt 24.10.6 / MediaTek Filogic (aarch64) / IMOU HX21
-
-### Legend
-
-- **Added** — new features
-- **Fixed** — bug fixes
-- **Changed** — behavior changes
-- **Technical** — internal improvements
+- Five-tab interface (General Settings, Users Manager, Online Users, Advanced, Help)
+- Expanded Help tab with 13 collapsible documentation sections
+- Online Users parser rewritten — kernel-sourced peer IP, correct duration math, ~25ms response
+- Firewall Setup with preview, auto-backup, and restore
+- Tab persistence via localStorage
+- CI builds single universal IPK/APK (no arch duplication)
 
 ---
 
@@ -568,7 +643,7 @@ make package/luci-app-pppoe-manager/compile V=s
 
 ### Method 3 — GitHub Actions (automated)
 
-Every tag push triggers a build for three architectures. See `.github/workflows/build.yml`.
+Every tag push triggers a build. See `.github/workflows/build.yml` and `.github/workflows/build-apk.yml`.
 
 ---
 
@@ -584,98 +659,65 @@ Every tag push triggers a build for three architectures. See `.github/workflows/
 
 ## Glossary
 
-Terms used in this README.
-
 ### Network fundamentals
 
-| Term | Full form | Meaning |
-|---|---|---|
-| **PPPoE** | Point-to-Point Protocol over Ethernet | Protocol that encapsulates PPP frames inside Ethernet. Used by ISPs and for local dial-in. |
-| **PPP** | Point-to-Point Protocol | The underlying protocol that carries IP over a serial link. |
-| **CHAP** | Challenge Handshake Authentication Protocol | The authentication method used by PPPoE. Passwords are hashed, not sent in clear. |
-| **PAP** | Password Authentication Protocol | Older auth method — sends password in clear. Not recommended. |
-| **MS-CHAP-v2** | Microsoft CHAP v2 | Windows-compatible CHAP variant. |
-| **LAN** | Local Area Network | Your home/office network. |
-| **WAN** | Wide Area Network | The internet/ISP side. |
-| **IP** | Internet Protocol | Each device's address (e.g. `192.168.11.1`). |
-| **MAC** | Media Access Control | Hardware address of a network card. |
-| **DHCP** | Dynamic Host Configuration Protocol | Automatically assigns IPs. |
-| **DNS** | Domain Name System | Translates names to IPs. |
-| **AC** | Access Concentrator | The server side of PPPoE. |
-| **Session** | An active PPPoE connection | One client = one session. |
+| Term | Meaning |
+|------|---------|
+| **PPPoE** | Point-to-Point Protocol over Ethernet — how clients dial in |
+| **PPP** | Point-to-Point Protocol — the underlying link protocol |
+| **CHAP** | Challenge Handshake Authentication Protocol — password verification |
+| **PAP** | Password Authentication Protocol — older, sends password in clear |
+| **LAN** | Local Area Network — your home/office network |
+| **WAN** | Wide Area Network — the internet/ISP side |
+| **IP** | Internet Protocol — each device's address |
+| **MAC** | Media Access Control — hardware address of a network card |
+| **DHCP** | Dynamic Host Configuration Protocol — auto IP assignment |
+| **DNS** | Domain Name System — names to IPs |
+| **AC** | Access Concentrator — your router (server side) |
+| **Session** | An active PPPoE connection |
 
 ### OpenWrt ecosystem
 
 | Term | Meaning |
-|---|---|
-| **OpenWrt** | Open-source router firmware (Linux-based). |
-| **ImmortalWrt** | OpenWrt fork with extra packages and Chinese-friendly defaults. |
-| **LuCI** | OpenWrt's web-based configuration interface. |
-| **UCI** | Unified Configuration Interface — stores all config under `/etc/config/`. |
-| **procd** | OpenWrt's service manager. |
-| **rpcd** | The service behind LuCI that processes web requests. |
-| **uhttpd** | The lightweight HTTP server serving LuCI. |
-| **opkg** | Package manager for OpenWrt ≤ 24.10. Uses `.ipk`. |
-| **apk** | Package manager for OpenWrt ≥ 25.12. Uses `.apk`. |
-| **ubus** | OpenWrt's internal message bus. Used for inter-service communication. |
-| **ucode** | OpenWrt's scripting language (successor to Lua for RPC backends). |
-| **nftables** | Modern Linux firewall framework. Replaces iptables in OpenWrt 24.10+. |
-| **iptables** | Legacy Linux firewall framework. |
-| **conntrack** | Connection tracking — tracks active network flows. |
-| **mwan3** | Multi-WAN manager — load balancing and failover. |
-| **flow offloading** | Kernel feature that speeds up forwarding. |
-| **fwmark** | A numeric tag attached to packets for routing decisions. |
-| **procd init** | Service definition using procd, OpenWrt's process manager. |
-
-### Shell commands
-
-| Command | Meaning |
-|---|---|
-| `uci set` / `uci get` / `uci commit` / `uci show` | Read/write UCI config |
-| `opkg install` / `opkg remove` / `opkg update` | Manage ipk packages |
-| `apk add` / `apk del` | Manage apk packages |
-| `logread` | Read the system log |
-| `ubus list` | List running ubus services |
-| `ps w` | List processes |
-| `ifconfig` / `ip addr` | Show network interfaces |
-| `wget` | Download a file |
-| `scp` | Secure file copy over SSH |
-| `ssh` | Secure remote shell |
-| `reboot` | Restart the router |
-| `chmod +x` | Make file executable |
+|------|---------|
+| **OpenWrt** | Open-source router firmware (Linux-based) |
+| **ImmortalWrt** | OpenWrt fork with extra packages and Chinese-friendly defaults |
+| **LuCI** | OpenWrt's web-based configuration interface |
+| **UCI** | Unified Configuration Interface — stores all config under `/etc/config/` |
+| **procd** | OpenWrt's service manager |
+| **rpcd** | The service behind LuCI that processes web requests |
+| **uhttpd** | Lightweight HTTP server serving LuCI |
+| **opkg** | Package manager for OpenWrt ≤ 24.10 (uses `.ipk`) |
+| **apk** | Package manager for OpenWrt ≥ 25.12 (uses `.apk`) |
+| **ubus** | OpenWrt's internal message bus |
+| **ucode** | OpenWrt's scripting language for RPC backends |
+| **nftables** | Modern Linux firewall framework |
+| **iptables** | Legacy Linux firewall framework |
+| **conntrack** | Connection tracking — tracks active network flows |
+| **mwan3** | Multi-WAN manager — load balancing and failover |
+| **flow offloading** | Kernel feature that speeds up forwarding |
+| **fwmark** | Numeric tag attached to packets for routing decisions |
 
 ### Interface naming
 
 | Name | Meaning |
-|---|---|
+|------|---------|
 | **eth0, eth1** | Physical Ethernet interfaces |
 | **lan1, lan2, lan3** | LAN ports |
 | **wan** | WAN port |
 | **br-lan** | LAN bridge |
 | **pppX** | Active PPP interface (X = 0, 1, 2, …) |
 | **pppoe-wan** | PPPoE interface for your ISP WAN |
-| **ppp+** | Wildcard matching all `pppX` interfaces |
+| **ppp+** | Wildcard matching all pppX interfaces |
 
 ### Units
 
 | Unit | Meaning |
-|---|---|
+|------|---------|
 | **Mbit/s, Mbps** | Megabits per second — data rate |
 | **Kbit/s** | Kilobits per second |
 | **ms** | Millisecond — 1/1000 second |
 | **KB, MB** | Kilobyte, Megabyte (8 bits = 1 byte) |
-
-### Platform
-
-| Term | Meaning |
-|---|---|
-| **Git** | Version control system |
-| **GitHub** | Git repository hosting platform |
-| **Repository** | A collection of code and files |
-| **Commit** | A saved snapshot of changes |
-| **Tag** | A named marker (e.g. `v1.0.0`) |
-| **Release** | A published version with downloadable files |
-| **SDK** | Software Development Kit — the toolchain used to build packages |
 
 ---
 
