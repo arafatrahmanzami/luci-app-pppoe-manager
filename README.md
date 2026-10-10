@@ -4,7 +4,7 @@
 
 A modern PPPoE Server Manager for OpenWrt / ImmortalWrt — a lightweight LuCI (OpenWrt's web-based configuration User Interface) application that manages the Roaring Penguin PPPoE server (`rp-pppoe-server`) with an easy-to-use web interface, per-user expiration dates, automatic account blocking, live online session monitoring, and one-click disconnection.
 
-**Release:** `1.1.0-r2` — 2026-10-10 — by [@arafatrahmanzami](https://github.com/arafatrahmanzami)
+**Release:** `1.1.0-r3` — 2026-10-10 — by [@arafatrahmanzami](https://github.com/arafatrahmanzami)
 
 Built on top of `rp-pppoe-server` + `ppp` + `nftables`/`iptables` firewall, with a modern LuCI JavaScript UI. Tested on ImmortalWrt 24.10 (MediaTek Filogic / IMOU HX21, aarch64).
 

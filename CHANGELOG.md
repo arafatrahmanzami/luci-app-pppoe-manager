@@ -14,6 +14,11 @@ Versioning follows [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 - RADIUS authentication backend
 - accel-ppp engine integration
 
+## [1.1.0-r3]
+
+### Fixed
+- Rootfs workflow: removed silent guards, now fails loud
+
 ## [1.1.0-r2] — 2026-10-10
 
 ### Fixed
