@@ -16,11 +16,9 @@ jobs:
           - label: imou-hx21
             imagebuilder: immortalwrt-imagebuilder-24.10.6-mediatek-filogic.Linux-x86_64.tar.zst
             subdir: targets/mediatek/filogic
-            profile: imou_lc-hx3001
           - label: x86-64
             imagebuilder: immortalwrt-imagebuilder-24.10.6-x86-64.Linux-x86_64.tar.zst
             subdir: targets/x86/64
-            profile: generic
 
     steps:
       - uses: actions/checkout@v4
@@ -46,11 +44,17 @@ jobs:
           mkdir -p ib/package/luci-app-pppoe-manager
           rsync -a --exclude='.git' --exclude='.github' src/ ib/package/luci-app-pppoe-manager/
 
+      - name: Configure rootfs output
+        working-directory: ib
+        run: |
+          echo "CONFIG_TARGET_ROOTFS_TARGZ=y" >> .config
+          echo "CONFIG_TARGET_ROOTFS_SQUASHFS=y" >> .config
+          make defconfig
+
       - name: Build rootfs.tar.gz
         working-directory: ib
         run: |
           make image \
-            PROFILE="${{ matrix.profile }}" \
             PACKAGES="luci-app-pppoe-manager rp-pppoe-server rp-pppoe-common ppp ppp-mod-pppoe conntrack" \
             CONFIG_TARGET_ROOTFS_TARGZ=y \
             V=s 2>&1 | tee /tmp/ib-build.log
@@ -58,7 +62,8 @@ jobs:
       - name: Collect rootfs
         run: |
           mkdir -p out
-          find ib/bin/targets -name "*rootfs*.tar.gz" -exec cp {} out/ \;
+          find ib/bin -name "*rootfs*.tar.gz" -exec cp {} out/ \;
+          find ib/bin -name "*rootfs*.tgz" -exec cp {} out/ \;
           ls -lh out/
 
       - uses: actions/upload-artifact@v4
@@ -77,10 +82,13 @@ jobs:
       - uses: actions/download-artifact@v4
         with:
           path: artifacts
-      - run: find artifacts -type f | sort
-      - uses: softprops/action-gh-release@v2
+
+      - name: List artifacts
+        run: find artifacts -type f | sort
+
+      - name: Create Release
+        uses: softprops/action-gh-release@v2
         with:
           files: artifacts/**/*.tar.gz
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-

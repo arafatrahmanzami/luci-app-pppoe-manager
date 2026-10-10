@@ -57,17 +57,18 @@ jobs:
         working-directory: sdk
         run: |
           echo "CONFIG_USE_APK=y" >> .config
+          echo "CONFIG_SIGNED_PACKAGES=y" >> .config
           echo "CONFIG_PACKAGE_luci-app-pppoe-manager=y" >> .config
           make defconfig
 
-      - name: Compile
+      - name: Compile APK
         working-directory: sdk
-        run: make package/luci-app-pppoe-manager/compile V=s
+        run: make CONFIG_USE_APK=y package/luci-app-pppoe-manager/compile V=s
 
       - name: Collect APK
         run: |
           mkdir -p out
-          find sdk/bin/packages -name "luci-app-pppoe-manager_*.apk" -exec cp {} out/ \;
+          find sdk/bin -name "luci-app-pppoe-manager*.apk" -exec cp {} out/ \;
           ls -lh out/
 
       - uses: actions/upload-artifact@v4
@@ -86,8 +87,12 @@ jobs:
       - uses: actions/download-artifact@v4
         with:
           path: artifacts
-      - run: find artifacts -type f | sort
-      - uses: softprops/action-gh-release@v2
+
+      - name: List artifacts
+        run: find artifacts -type f | sort
+
+      - name: Create Release
+        uses: softprops/action-gh-release@v2
         with:
           files: artifacts/**/*.apk
         env:
