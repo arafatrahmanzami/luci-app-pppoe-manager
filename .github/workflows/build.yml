@@ -11,6 +11,8 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
+        with:
+          path: src
 
       - name: Install build deps
         run: |
@@ -28,7 +30,7 @@ jobs:
       - name: Copy package into SDK
         run: |
           mkdir -p sdk/package/luci-app-pppoe-manager
-          rsync -a --exclude='.git' --exclude='.github' ./ sdk/package/luci-app-pppoe-manager/
+          rsync -a --exclude='.git' --exclude='.github' src/ sdk/package/luci-app-pppoe-manager/
 
       - name: Feeds update and install
         working-directory: sdk
@@ -46,7 +48,7 @@ jobs:
         working-directory: sdk
         run: make package/luci-app-pppoe-manager/compile V=s
 
-      - name: Collect IPK (universal name)
+      - name: Collect IPK
         run: |
           mkdir -p out
           IPK=$(find sdk/bin/packages -name "luci-app-pppoe-manager_*.ipk" | head -1)

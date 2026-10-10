@@ -11,6 +11,8 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
+        with:
+          path: src
 
       - name: Install build deps
         run: |
@@ -28,7 +30,7 @@ jobs:
       - name: Copy package into SDK
         run: |
           mkdir -p sdk/package/luci-app-pppoe-manager
-          rsync -a --exclude='.git' --exclude='.github' ./ sdk/package/luci-app-pppoe-manager/
+          rsync -a --exclude='.git' --exclude='.github' src/ sdk/package/luci-app-pppoe-manager/
 
       - name: Feeds update and install
         working-directory: sdk
@@ -47,7 +49,7 @@ jobs:
         working-directory: sdk
         run: make CONFIG_USE_APK=y package/luci-app-pppoe-manager/compile V=s
 
-      - name: Collect APK (universal name)
+      - name: Collect APK
         run: |
           mkdir -p out
           APK=$(find sdk/bin -name "luci-app-pppoe-manager*.apk" | head -1)
