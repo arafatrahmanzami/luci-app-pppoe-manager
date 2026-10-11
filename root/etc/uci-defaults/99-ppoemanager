@@ -1,6 +1,9 @@
 #!/bin/sh
 # Do NOT auto-start the service. User must enable manually.
 [ -f /etc/config/ppoemanager ] || touch /etc/config/ppoemanager
+
+# Ensure /lib/ppp exists (rp-pppoe-server may not create it on 25.12)
+mkdir -p /lib/ppp
 [ -f /lib/ppp/ppp-users ] || touch /lib/ppp/ppp-users
 [ -f /etc/ppp/ips ] || echo "192.168.11.10-73" > /etc/ppp/ips
 
