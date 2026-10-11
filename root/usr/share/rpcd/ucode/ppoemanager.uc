@@ -4,6 +4,14 @@ import { open, popen } from 'fs';
 const DB_FILE = '/lib/ppp/ppp-users';
 const SECRETS_FILE = '/etc/ppp/chap-secrets';
 
+// Strip leading #s from a username (works on both "#user" and "##user")
+function clean_user(u) {
+    if (!length(u)) return '';
+    let out = u;
+    while (substr(out, 0, 1) == '#') out = substr(out, 1);
+    return out;
+}
+
 function read_users() {
     const users = [];
     const f = open(DB_FILE, 'r');
@@ -35,8 +43,6 @@ function username_by_ip(ip) {
 
 function read_online() {
     const sessions = [];
-
-    // Step 1: map pppX -> {peer, gateway} from kernel
     const ifaceInfo = {};
     const p1 = popen("for i in /sys/class/net/ppp[0-9]*; do [ -e \"$i\" ] || continue; iface=$(basename $i); info=$(ip -4 addr show $iface 2>/dev/null); peer=$(echo \"$info\" | awk '/peer/{print $4}' | cut -d'/' -f1); gw=$(echo \"$info\" | awk '/inet /{print $2}' | cut -d'/' -f1); [ -n \"$peer\" ] && echo \"$iface|$peer|$gw\"; done 2>/dev/null");
     if (p1) {
@@ -47,7 +53,6 @@ function read_online() {
         p1.close();
     }
 
-    // Step 2: single ps pass — much faster than /proc iteration
     const p2 = popen("ps w 2>/dev/null | grep -F 'pppoe.so' | grep -v grep | grep -v ipparam");
     if (!p2) return sessions;
 
@@ -82,9 +87,7 @@ function read_online() {
         }
 
         push(sessions, {
-            pid,
-            mac,
-            iface,
+            pid, mac, iface,
             cip: info.peer,
             gateway: info.gw,
             username: username_by_ip(info.peer),
@@ -93,6 +96,25 @@ function read_online() {
     }
     p2.close();
     return sessions;
+}
+
+// Remove ALL entries (blocked and unblocked) for a given clean username.
+function purge_user(userClean) {
+    if (!length(userClean)) return;
+    system(`sed -i "/|#*${userClean}|/d" ${DB_FILE}`);
+    system(`sed -i "/^#*${userClean} /d" ${SECRETS_FILE}`);
+}
+
+// Derive subnet base from config's firstremoteip
+function get_subnet_base() {
+    const p = popen("uci -q get ppoemanager.server.firstremoteip 2>/dev/null");
+    if (!p) return '192.168.11';
+    const ip = trim(p.read('all'));
+    p.close();
+    if (!length(ip)) return '192.168.11';
+    const parts = split(ip, '.', 4);
+    if (length(parts) < 3) return '192.168.11';
+    return `${parts[0]}.${parts[1]}.${parts[2]}`;
 }
 
 const methods = {
@@ -112,7 +134,6 @@ const methods = {
     },
     setup_firewall: {
         call: function() {
-            // Backup current firewall config first
             const ts = trim(system("date +%Y%m%d-%H%M%S"));
             system(`cp /etc/config/firewall /etc/config/firewall.bak-ppoemanager-${ts}`);
 
@@ -187,37 +208,61 @@ const methods = {
     add_user: {
         args: { user: 'user', passwd: 'passwd', ipaddr: 'ipaddr', expiry: 'expiry' },
         call: function(req) {
-            const user = trim(req.args.user); const passwd = trim(req.args.passwd);
-            const ipaddr = trim(req.args.ipaddr); const expiry = trim(req.args.expiry);
-            if (!length(user) || !length(passwd)) return { result: false };
+            const rawUser = trim(req.args.user);
+            const userClean = clean_user(rawUser);
+            const passwd = trim(req.args.passwd);
+            const ipaddr = trim(req.args.ipaddr);
+            const expiry = trim(req.args.expiry);
+
+            if (!length(userClean)) return { result: false, error: 'missing_user' };
+            if (!length(passwd)) return { result: false, error: 'missing_password' };
+            if (!length(expiry)) return { result: false, error: 'missing_expiry' };
+
             const existing = read_users();
             for (let i = 0; i < length(existing); i++) {
-                if (existing[i].user == user || existing[i].user == '#' + user) return { result: false, error: 'username_exists' };
+                if (clean_user(existing[i].user) == userClean) return { result: false, error: 'username_exists' };
             }
+
             let ip = ipaddr, id = '0';
             if (!length(ipaddr) || ipaddr == '*') {
-                const base = '192.168.11'; let n = 10;
-                while (n < 254) { n++; const cand = `${base}.${n}`;
-                    if (system(`grep -q '${cand}|' ${DB_FILE}`) != 0) { ip = cand; id = `${n}`; break; } }
-            } else { const p = split(ip, '.', 4); id = length(p) == 4 ? p[3] : '0'; }
-            system(`echo '${expiry}|${user}|${passwd}|${ip}|${id}' >> ${DB_FILE}`);
-            system(`echo '${user} * ${passwd} ${ip}' >> ${SECRETS_FILE}`);
+                const base = get_subnet_base(); let n = 10;
+                while (n < 254) {
+                    n++;
+                    const cand = `${base}.${n}`;
+                    if (system(`grep -q '${cand}|' ${DB_FILE}`) != 0) { ip = cand; id = `${n}`; break; }
+                }
+            } else {
+                const p = split(ip, '.', 4);
+                id = length(p) == 4 ? p[3] : '0';
+            }
+
+            purge_user(userClean);
+
+            system(`echo '${expiry}|${userClean}|${passwd}|${ip}|${id}' >> ${DB_FILE}`);
+            system(`echo '${userClean} * ${passwd} ${ip}' >> ${SECRETS_FILE}`);
             system('/etc/init.d/ppoemanager restart >/dev/null 2>&1 &');
-            return { result: true };
+            return { result: true, ip: ip, id: id };
         }
     },
     edit_user: {
         args: { olduser: 'olduser', user: 'user', passwd: 'passwd', ipaddr: 'ipaddr', expiry: 'expiry' },
         call: function(req) {
-            const olduser = trim(req.args.olduser); const user = trim(req.args.user);
-            const passwd = trim(req.args.passwd); const ipaddr = trim(req.args.ipaddr);
+            const olduserClean = clean_user(trim(req.args.olduser));
+            const userClean = clean_user(trim(req.args.user));
+            const passwd = trim(req.args.passwd);
+            const ipaddr = trim(req.args.ipaddr);
             const expiry = trim(req.args.expiry);
-            system(`sed -i '/|${olduser}|/d' ${DB_FILE}`);
-            system(`sed -i '/^${olduser} /d' ${SECRETS_FILE}`);
-            system(`sed -i '/^#${olduser} /d' ${SECRETS_FILE}`);
-            const p = split(ipaddr, '.', 4); const id = length(p) == 4 ? p[3] : '0';
-            system(`echo '${expiry}|${user}|${passwd}|${ipaddr}|${id}' >> ${DB_FILE}`);
-            system(`echo '${user} * ${passwd} ${ipaddr}' >> ${SECRETS_FILE}`);
+
+            if (!length(userClean)) return { result: false, error: 'missing_user' };
+            if (!length(passwd)) return { result: false, error: 'missing_password' };
+
+            purge_user(olduserClean);
+            if (userClean != olduserClean) purge_user(userClean);
+
+            const p = split(ipaddr, '.', 4);
+            const id = length(p) == 4 ? p[3] : '0';
+            system(`echo '${expiry}|${userClean}|${passwd}|${ipaddr}|${id}' >> ${DB_FILE}`);
+            system(`echo '${userClean} * ${passwd} ${ipaddr}' >> ${SECRETS_FILE}`);
             system('/etc/init.d/ppoemanager restart >/dev/null 2>&1 &');
             return { result: true };
         }
@@ -225,10 +270,9 @@ const methods = {
     delete_user: {
         args: { user: 'user' },
         call: function(req) {
-            const user = trim(req.args.user);
-            system(`sed -i '/|${user}|/d' ${DB_FILE}`);
-            system(`sed -i '/^${user} /d' ${SECRETS_FILE}`);
-            system(`sed -i '/^#${user} /d' ${SECRETS_FILE}`);
+            const userClean = clean_user(trim(req.args.user));
+            if (!length(userClean)) return { result: false };
+            purge_user(userClean);
             system('/etc/init.d/ppoemanager restart >/dev/null 2>&1 &');
             return { result: true };
         }
@@ -237,8 +281,24 @@ const methods = {
         args: { pid: 'pid' },
         call: function(req) {
             const pid = trim(req.args.pid);
-            if (pid && match(pid, /^\d+$/)) { system(`kill -9 ${pid} 2>/dev/null`); return { result: true }; }
-            return { result: false };
+            if (!pid || !match(pid, /^\d+$/)) return { result: false };
+
+            // Step 1: SIGTERM — graceful shutdown, pppd sends PADT to client
+            system(`kill -TERM ${pid} 2>/dev/null`);
+
+            // Step 2: brief grace period for PADT to be sent
+            system('sleep 1');
+
+            // Step 3: if still alive, SIGKILL as fallback
+            const still = system(`[ -d /proc/${pid} ] && echo alive`);
+            if (still == 0) {
+                system(`kill -9 ${pid} 2>/dev/null`);
+            }
+
+            // Step 4: flush conntrack so client can reconnect immediately
+            system('conntrack -F >/dev/null 2>&1');
+
+            return { result: true, method: 'sigterm' };
         }
     }
 };

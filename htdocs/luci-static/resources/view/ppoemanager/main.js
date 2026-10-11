@@ -10,16 +10,16 @@
 
 var callGetUsers    = rpc.declare({ object: 'luci.ppoemanager', method: 'get_users',  expect: {} });
 var callGetOnline   = rpc.declare({ object: 'luci.ppoemanager', method: 'get_online', expect: {} });
-var callAddUser     = rpc.declare({ object: 'luci.ppoemanager', method: 'add_user',   params: ['user','passwd','ipaddr','expiry'], expect: { result: true } });
-var callEditUser    = rpc.declare({ object: 'luci.ppoemanager', method: 'edit_user',  params: ['olduser','user','passwd','ipaddr','expiry'], expect: { result: true } });
-var callDelUser     = rpc.declare({ object: 'luci.ppoemanager', method: 'delete_user',params: ['user'], expect: { result: true } });
-var callKill        = rpc.declare({ object: 'luci.ppoemanager', method: 'force_offline', params: ['pid'], expect: { result: true } });
+var callAddUser     = rpc.declare({ object: 'luci.ppoemanager', method: 'add_user',   params: ['user','passwd','ipaddr','expiry'], expect: {} });
+var callEditUser    = rpc.declare({ object: 'luci.ppoemanager', method: 'edit_user',  params: ['olduser','user','passwd','ipaddr','expiry'], expect: {} });
+var callDelUser     = rpc.declare({ object: 'luci.ppoemanager', method: 'delete_user',params: ['user'], expect: {} });
+var callKill        = rpc.declare({ object: 'luci.ppoemanager', method: 'force_offline', params: ['pid'], expect: {} });
 var callRestart     = rpc.declare({ object: 'luci.ppoemanager', method: 'restart_service', expect: { result: true } });
 var callFwSetup     = rpc.declare({ object: 'luci.ppoemanager', method: 'setup_firewall', expect: {} });
 var callFwStatus    = rpc.declare({ object: 'luci.ppoemanager', method: 'get_firewall_status', expect: {} });
 var callFwPreview   = rpc.declare({ object: 'luci.ppoemanager', method: 'get_firewall_preview', expect: {} });
 var callFwBackups   = rpc.declare({ object: 'luci.ppoemanager', method: 'list_firewall_backups', expect: {} });
-var callFwRestore   = rpc.declare({ object: 'luci.ppoemanager', method: 'restore_firewall', params: ['path'], expect: { result: true } });
+var callFwRestore   = rpc.declare({ object: 'luci.ppoemanager', method: 'restore_firewall', params: ['path'], expect: {} });
 
 function tsToDateStr(ts) { var d = new Date(parseInt(ts)*1000); return d.toISOString().slice(0,10); }
 function fmtDuration(s) { s = parseInt(s); if (isNaN(s)||s<0) return '-'; var h=Math.floor(s/3600), m=Math.floor((s%3600)/60); return h+'h '+m+'m'; }
@@ -83,8 +83,14 @@ var UsersTab = {
                     var ets=Math.floor(new Date(e).getTime()/1000);
                     if(ets <= Math.floor(Date.now()/1000)){alert('Expiration must be in future');return;}
                     callAddUser(u,p,i||'*',ets.toString()).then(function(r){
-                        if (r && r.error === 'username_exists') { alert('Username already exists'); return; }
+                        if (!r || r.result !== true) {
+                            var err = (r && r.error) ? r.error : 'unknown error';
+                            alert('Add failed: ' + err);
+                            return;
+                        }
                         location.reload();
+                    }).catch(function(e) {
+                        alert('RPC error: ' + (e && e.message ? e.message : e));
                     });
                 }},_('Add'))
             ])
@@ -447,7 +453,16 @@ var HelpTab = {
                     E('li',_('Duration — how long the session has been up'))
                 ]),
                 E('h4',{'style':'margin-top:10px'},_('Force Offline')),
-                E('p',_('Sends SIGKILL to the pppd process for that session. The client is disconnected immediately. Useful for kicking abusive clients or forcing re-authentication.'))
+                E('p',_('Sends SIGTERM to the pppd process for that session — a graceful shutdown that sends a PPPoE PADT (Active Discovery Terminate) packet to the client, then SIGKILL as fallback.')),
+                E('p',_('What happens next:')),
+                E('ul',{},[
+                    E('li',_('The client sees the PADT immediately and its PPP interface goes down.')),
+                    E('li',_('The client\'s PPPoE daemon will retry after its own holdoff timer — typically 5–10 seconds for most routers/PCs, up to 60s for some.')),
+                    E('li',_('The client can reconnect using the same credentials — no server-side block is applied.')),
+                    E('li',_('Conntrack is flushed so no stale entries prevent the new session from establishing.'))
+                ]),
+                E('p',_('Purpose: kick abusive clients, force re-authentication after a password change, free up an IP slot, or disconnect a client who is using a static IP that you need to reassign.')),
+                E('p',_('If a client cannot reconnect: check that their credentials are still valid (Users Manager → not Expired), and their router\'s PPPoE holdoff timer. Some clients wait longer than others.'))
             ]),
 
             // ---------- ADVANCED ----------
