@@ -14,6 +14,16 @@ Versioning follows [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 - RADIUS authentication backend
 - accel-ppp engine integration
 
+## [1.1.0-r14] — 2026-10-12
+
+### Fixed
+- Preferred Offload Mode not applying to firewall — replaced ListValue dropdown (failed on TypedSection anonymous=true) with three action buttons that call apply_offloading RPC directly.
+- UI showed stale state — added get_offload_mode RPC reading UCI fresh from disk + in-place redraw.
+
+### Added
+- get_offload_mode RPC method
+- apply_offloading now accepts optional mode argument
+
 ## [1.1.0-r11] — 2026-10-12
 
 ### Fixed

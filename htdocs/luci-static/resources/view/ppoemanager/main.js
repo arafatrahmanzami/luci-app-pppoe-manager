@@ -20,6 +20,9 @@ var callFwStatus    = rpc.declare({ object: 'luci.ppoemanager', method: 'get_fir
 var callFwPreview   = rpc.declare({ object: 'luci.ppoemanager', method: 'get_firewall_preview', expect: {} });
 var callFwBackups   = rpc.declare({ object: 'luci.ppoemanager', method: 'list_firewall_backups', expect: {} });
 var callFwRestore   = rpc.declare({ object: 'luci.ppoemanager', method: 'restore_firewall', params: ['path'], expect: {} });
+var callApplyOffload = rpc.declare({ object: 'luci.ppoemanager', method: 'apply_offloading', expect: {} });
+var callSetOffload = rpc.declare({ object: 'luci.ppoemanager', method: 'apply_offloading', params: ['mode'], expect: {} });
+var callGetOffload = rpc.declare({ object: 'luci.ppoemanager', method: 'get_offload_mode', expect: {} });
 
 function tsToDateStr(ts) { var d = new Date(parseInt(ts)*1000); return d.toISOString().slice(0,10); }
 function fmtDuration(s) { s = parseInt(s); if (isNaN(s)||s<0) return '-'; var h=Math.floor(s/3600), m=Math.floor((s%3600)/60); return h+'h '+m+'m'; }
@@ -275,10 +278,17 @@ var SettingsTab = {
 // ============================================================
 // ADVANCED SETTINGS TAB
 // ============================================================
+var callSetOffload = rpc.declare({
+    object: 'luci.ppoemanager',
+    method: 'apply_offloading',
+    params: ['mode'],
+    expect: {}
+});
+
 var AdvancedTab = {
     render: function() {
         var m = new form.Map('ppoemanager', _('Advanced Settings'),
-            _('These options require understanding of mwan3, firewall flow offloading, and PPP. Change with caution.'));
+            _('These options require understanding of mwan3 and firewall flow offloading. Change with caution.'));
 
         var s = m.section(form.TypedSection, 'coordination', _('Multi-WAN & Offload Coordination'));
         s.anonymous = true;
@@ -289,11 +299,6 @@ var AdvancedTab = {
         o = s.option(form.Flag, 'manage_offloading', _('Auto-manage flow offloading'),
             _('Control firewall flow offloading to avoid conflicts with mwan3.'));
         o.default = '1'; o.rmempty = false;
-        o = s.option(form.ListValue, 'offload_mode', _('Preferred Offload Mode'));
-        o.value('software', _('Software (recommended)'));
-        o.value('hardware', _('Hardware (fastest, no mwan3 failover)'));
-        o.value('auto', _('Auto'));
-        o.default = 'software';
         o = s.option(form.Flag, 'conntrack_flush_on_failover', _('mwan3 conntrack fix'),
             _('Install /etc/mwan3.user hook to flush dead flows on failover.'));
         o.default = '1'; o.rmempty = false;
@@ -307,12 +312,60 @@ var AdvancedTab = {
         o2.default = '/etc/ppp/pppoe-server-options';
         o2 = s2.option(form.Value, 'offset', _('Session Offset'), _('Starting offset for session IDs.'));
         o2.datatype = 'uinteger';
-        o2 = s2.option(form.Value, 'unit', _('First Session Unit'), _('First pppX unit number assigned.'));
+        o2 = s2.option(form.Value, 'unit', _('First Session Unit'), _('First pppX unit number.'));
         o2.datatype = 'uinteger';
         o2 = s2.option(form.Flag, 'sync', _('Synchronous PPP'), _('Use synchronous PPP (rarely needed).'));
         o2.default = '0'; o2.rmempty = false;
 
-        return m.render();
+        return m.render().then(function(node) {
+            var offloadContainer = E('div', {'class': 'cbi-section'});
+            node.appendChild(offloadContainer);
+
+            function modeBtn(mode, value, label) {
+                var isActive = (mode === value);
+                return E('button', {
+                    'class': 'btn ' + (isActive ? 'cbi-button-positive' : 'cbi-button'),
+                    'style': 'margin-right:10px',
+                    'click': function() {
+                        return callSetOffload(value).then(function(r) {
+                            var newMode = (r && r.mode) || value;
+                            ui.addNotification(null, E('p', _('Offload mode set to: ') + newMode));
+                            drawOffload(newMode);
+                        });
+                    }
+                }, label + (isActive ? ' \u2713' : ''));
+            }
+
+            function drawOffload(mode) {
+                offloadContainer.innerHTML = '';
+                offloadContainer.appendChild(E('h3', _('Preferred Offload Mode')));
+                offloadContainer.appendChild(E('p', _('Select how the firewall should handle flow offloading. This affects speed and mwan3 compatibility.')));
+
+                offloadContainer.appendChild(E('div', {'style': 'margin:10px 0'}, [
+                    modeBtn(mode, 'software', _('Software (recommended)')),
+                    modeBtn(mode, 'hardware', _('Hardware (fastest, no mwan3)')),
+                    modeBtn(mode, 'none',     _('Disable offloading'))
+                ]));
+
+                offloadContainer.appendChild(E('div', {'class': 'cbi-section-descr'}, [
+                    E('strong', {}, _('Current mode: ')),
+                    E('code', {}, mode)
+                ]));
+
+                offloadContainer.appendChild(E('div', {'class': 'cbi-section-descr'}, [
+                    E('ul', {'style': 'margin-top:8px'}, [
+                        E('li', {}, _('Software — flow_offloading=1, flow_offloading_hw=0. Safe with mwan3 failover.')),
+                        E('li', {}, _('Hardware — flow_offloading=1, flow_offloading_hw=1. Fastest, but incompatible with mwan3 failover.')),
+                        E('li', {}, _('Disable — both flags = 0. Use for troubleshooting.'))
+                    ])
+                ]));
+            }
+
+            return callGetOffload().then(function(r) {
+                drawOffload((r && r.mode) || 'software');
+                return node;
+            });
+        });
     }
 };
 

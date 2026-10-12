@@ -153,6 +153,58 @@ const methods = {
             return { result: true };
         }
     },
+    get_offload_mode: {
+        call: function() {
+            let mode = 'software';
+            const p = popen("uci -q get pppoemanager.coord.offload_mode 2>/dev/null");
+            if (p) {
+                const v = trim(p.read('all'));
+                p.close();
+                if (length(v)) mode = v;
+            }
+            // Also read firewall state for verification
+            let fwSoft = '0', fwHw = '0';
+            const a = popen("uci -q get firewall.@defaults[0].flow_offloading 2>/dev/null");
+            if (a) { const v = trim(a.read('all')); a.close(); if (length(v)) fwSoft = v; }
+            const b = popen("uci -q get firewall.@defaults[0].flow_offloading_hw 2>/dev/null");
+            if (b) { const v = trim(b.read('all')); b.close(); if (length(v)) fwHw = v; }
+            return { mode: mode, flow_offloading: fwSoft, flow_offloading_hw: fwHw };
+        }
+    },
+    apply_offloading: {
+        args: { mode: 'mode' },
+        call: function(req) {
+            let mode = trim(req.args.mode);
+            // If no arg passed, read from UCI
+            if (!length(mode)) {
+                const p = popen("uci -q get pppoemanager.coord.offload_mode 2>/dev/null");
+                if (p) {
+                    mode = trim(p.read('all'));
+                    p.close();
+                }
+            }
+            if (!length(mode)) mode = 'software';
+
+            // Persist the mode to UCI
+            system(`uci set pppoemanager.coord.offload_mode='${mode}'`);
+            system("uci commit pppoemanager");
+
+            // Apply to firewall
+            if (mode == 'hardware' || mode == 'auto') {
+                system("uci set firewall.@defaults[0].flow_offloading='1'");
+                system("uci set firewall.@defaults[0].flow_offloading_hw='1'");
+            } else if (mode == 'software') {
+                system("uci set firewall.@defaults[0].flow_offloading='1'");
+                system("uci set firewall.@defaults[0].flow_offloading_hw='0'");
+            } else {
+                system("uci set firewall.@defaults[0].flow_offloading='0'");
+                system("uci set firewall.@defaults[0].flow_offloading_hw='0'");
+            }
+            system("uci commit firewall");
+            system("/etc/init.d/firewall reload >/dev/null 2>&1 &");
+            return { result: true, mode: mode };
+        }
+    },
     setup_firewall: {
         call: function() {
             const ts = trim(system("date +%Y%m%d-%H%M%S"));
