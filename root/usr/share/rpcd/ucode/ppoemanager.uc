@@ -43,32 +43,52 @@ function username_by_ip(ip) {
 
 function read_online() {
     const sessions = [];
+
+    // Step 1: build PID <-> interface maps from /run/pppd/*.pid
+    const pidToIface = {};
+    const pidList = popen("ls /run/pppd/*.pid 2>/dev/null");
+    if (pidList) {
+        for (let line = pidList.read('line'); length(line); line = pidList.read('line')) {
+            const f = trim(line);
+            const m = match(f, /\/ppp([^\/]+)\.pid$/);
+            if (!m) continue;
+            const iface = 'ppp' + m[1];
+            const pf = open(f, 'r');
+            if (!pf) continue;
+            const pid = trim(pf.read('all'));
+            pf.close();
+            if (length(pid)) pidToIface[pid] = iface;
+        }
+        pidList.close();
+    }
+
+    // Step 2: interface -> {peer, gateway} from kernel
     const ifaceInfo = {};
-    const p1 = popen("for i in /sys/class/net/ppp[0-9]*; do [ -e \"$i\" ] || continue; iface=$(basename $i); info=$(ip -4 addr show $iface 2>/dev/null); peer=$(echo \"$info\" | awk '/peer/{print $4}' | cut -d'/' -f1); gw=$(echo \"$info\" | awk '/inet /{print $2}' | cut -d'/' -f1); [ -n \"$peer\" ] && echo \"$iface|$peer|$gw\"; done 2>/dev/null");
-    if (p1) {
-        for (let line = p1.read('line'); length(line); line = p1.read('line')) {
+    const ipOut = popen("for i in /sys/class/net/ppp[0-9]*; do [ -e \"$i\" ] || continue; iface=$(basename $i); info=$(ip -4 addr show $iface 2>/dev/null); peer=$(echo \"$info\" | awk '/peer/{print $4}' | cut -d'/' -f1); gw=$(echo \"$info\" | awk '/inet /{print $2}' | cut -d'/' -f1); [ -n \"$peer\" ] && echo \"$iface|$peer|$gw\"; done 2>/dev/null");
+    if (ipOut) {
+        for (let line = ipOut.read('line'); length(line); line = ipOut.read('line')) {
             const parts = split(trim(line), '|', 3);
             if (length(parts) == 3) ifaceInfo[parts[0]] = { peer: parts[1], gw: parts[2] };
         }
-        p1.close();
+        ipOut.close();
     }
 
-    const p2 = popen("ps w 2>/dev/null | grep -F 'pppoe.so' | grep -v grep | grep -v ipparam");
-    if (!p2) return sessions;
+    // Step 3: enumerate pppd processes (exclude WAN via ipparam)
+    const psOut = popen("ps w 2>/dev/null | grep -F 'pppoe.so' | grep -v grep | grep -v ipparam");
+    if (!psOut) return sessions;
 
-    for (let line = p2.read('line'); length(line); line = p2.read('line')) {
+    for (let line = psOut.read('line'); length(line); line = psOut.read('line')) {
         const parts = split(trim(line), /\s+/, 2);
         if (length(parts) < 2) continue;
         const pid = parts[0];
         const cmd = parts[1];
 
-        const m = match(cmd, /rp_pppoe_sess (\d+):([0-9a-fA-F:]+)/);
+        const m = match(cmd, /rp_pppoe_sess \d+:([0-9a-fA-F:]+)/);
         if (!m) continue;
-        const unit = m[1];
-        const mac = m[2];
-        const iface = 'ppp' + unit;
+        const mac = m[1];
 
-        const info = ifaceInfo[iface] || { peer: '', gw: '' };
+        const iface = pidToIface[pid] || '';
+        const info = iface ? (ifaceInfo[iface] || { peer: '', gw: '' }) : { peer: '', gw: '' };
 
         let duration = 0;
         const st = open(`/proc/${pid}/stat`, 'r');
@@ -87,18 +107,19 @@ function read_online() {
         }
 
         push(sessions, {
-            pid, mac, iface,
+            pid,
+            mac,
+            iface,
             cip: info.peer,
             gateway: info.gw,
-            username: username_by_ip(info.peer),
+            username: info.peer ? username_by_ip(info.peer) : '?',
             duration
         });
     }
-    p2.close();
+    psOut.close();
     return sessions;
 }
 
-// Remove ALL entries (blocked and unblocked) for a given clean username.
 function purge_user(userClean) {
     if (!length(userClean)) return;
     system(`sed -i "/|#*${userClean}|/d" ${DB_FILE}`);
