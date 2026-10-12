@@ -155,9 +155,9 @@ Answer these questions **before** installing:
 
 ```sh
 cd /tmp
-wget https://github.com/arafatrahmanzami/luci-app-pppoe-manager/releases/download/v1.1.0-r5/luci-app-pppoe-manager_1.1.0-r5_all.ipk
+wget https://github.com/arafatrahmanzami/luci-app-pppoe-manager/releases/download/v1.1.0-r14/luci-app-pppoe-manager_1.1.0-r14_all.ipk
 opkg update
-opkg install luci-app-pppoe-manager_1.1.0-r5_all.ipk
+opkg install luci-app-pppoe-manager_1.1.0-r14_all.ipk
 rm -f /tmp/luci-indexcache /tmp/luci-modulecache/*
 /etc/init.d/rpcd restart
 /etc/init.d/uhttpd restart
@@ -167,8 +167,8 @@ rm -f /tmp/luci-indexcache /tmp/luci-modulecache/*
 
 ```sh
 cd /tmp
-wget https://github.com/arafatrahmanzami/luci-app-pppoe-manager/releases/download/v1.1.0-r5/luci-app-pppoe-manager-1.1.0-r5.apk
-apk add --allow-untrusted luci-app-pppoe-manager-1.1.0-r5.apk
+wget https://github.com/arafatrahmanzami/luci-app-pppoe-manager/releases/download/v1.1.0-r14/luci-app-pppoe-manager-1.1.0-r14.apk
+apk add --allow-untrusted luci-app-pppoe-manager-1.1.0-r14.apk
 rm -f /tmp/luci-indexcache /tmp/luci-modulecache/*
 /etc/init.d/rpcd restart
 /etc/init.d/uhttpd restart
@@ -180,12 +180,12 @@ rm -f /tmp/luci-indexcache /tmp/luci-modulecache/*
 cd /tmp && \
 if command -v apk >/dev/null 2>&1; then \
   echo "Detected apk — OpenWrt 25.12+" && \
-  wget -O pppoe.pkg https://github.com/arafatrahmanzami/luci-app-pppoe-manager/releases/download/v1.1.0-r5/luci-app-pppoe-manager-1.1.0-r5.apk && \
+  wget -O pppoe.pkg https://github.com/arafatrahmanzami/luci-app-pppoe-manager/releases/download/v1.1.0-r14/luci-app-pppoe-manager-1.1.0-r14.apk && \
   apk add --allow-untrusted pppoe.pkg; \
 else \
   echo "Detected opkg — OpenWrt 24.10 or older" && \
   opkg update && \
-  wget -O pppoe.pkg https://github.com/arafatrahmanzami/luci-app-pppoe-manager/releases/download/v1.1.0-r5/luci-app-pppoe-manager_1.1.0-r5_all.ipk && \
+  wget -O pppoe.pkg https://github.com/arafatrahmanzami/luci-app-pppoe-manager/releases/download/v1.1.0-r14/luci-app-pppoe-manager_1.1.0-r14_all.ipk && \
   opkg install pppoe.pkg; \
 fi && \
 rm -f /tmp/luci-indexcache /tmp/luci-modulecache/* && \
@@ -198,8 +198,8 @@ The `-full.tar.gz` contains all files at their target paths. Extract directly to
 
 ```sh
 cd /tmp
-wget https://github.com/arafatrahmanzami/luci-app-pppoe-manager/releases/download/v1.1.0-r5/luci-app-pppoe-manager-1.1.0-r5-full.tar.gz
-cd / && tar xzf /tmp/luci-app-pppoe-manager-1.1.0-r5-full.tar.gz
+wget https://github.com/arafatrahmanzami/luci-app-pppoe-manager/releases/download/v1.1.0-r14/luci-app-pppoe-manager-1.1.0-r14-full.tar.gz
+cd / && tar xzf /tmp/luci-app-pppoe-manager-1.1.0-r14-full.tar.gz
 chmod +x /etc/init.d/ppoemanager /usr/bin/ppoemanager-checker /usr/bin/ppoemanager-control
 /etc/init.d/rpcd restart
 /etc/init.d/uhttpd restart
@@ -211,7 +211,7 @@ Pre-built rootfs with the app installed:
 
 ```sh
 cd /tmp
-wget https://github.com/arafatrahmanzami/luci-app-pppoe-manager/releases/download/v1.1.0-r5/luci-app-pppoe-manager-rootfs-r5.tar.gz
+wget https://github.com/arafatrahmanzami/luci-app-pppoe-manager/releases/download/v1.1.0-r14/luci-app-pppoe-manager-rootfs-r14.tar.gz
 ```
 
 This is a complete root filesystem — for advanced users or image builders only.
@@ -230,8 +230,8 @@ See [Compile from Source](#compile-from-source-openwrt-sdk) below.
 
 ### Source code
 
-- [Download `.zip`](https://github.com/arafatrahmanzami/luci-app-pppoe-manager/archive/refs/tags/v1.1.0-r5.zip)
-- [Download `.tar.gz`](https://github.com/arafatrahmanzami/luci-app-pppoe-manager/archive/refs/tags/v1.1.0-r5.tar.gz)
+- [Download `.zip`](https://github.com/arafatrahmanzami/luci-app-pppoe-manager/archive/refs/tags/v1.1.0-r14.zip)
+- [Download `.tar.gz`](https://github.com/arafatrahmanzami/luci-app-pppoe-manager/archive/refs/tags/v1.1.0-r14.tar.gz)
 
 ---
 
@@ -581,7 +581,7 @@ They conflict. Only one can connect at a time. Edit each user and assign unique 
 
 See [CHANGELOG.md](CHANGELOG.md) for the full history.
 
-### [1.1.0-r5] — 2026-10-10 — First stable release
+### [1.1.0-r14] — 2026-10-10 — First stable release
 
 - Five-tab interface (General Settings, Users Manager, Online Users, Advanced, Help)
 - Expanded Help tab with 13 collapsible documentation sections
