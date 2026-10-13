@@ -9,6 +9,9 @@
 'require tools.widgets as widgets';
 
 var callGetUsers    = rpc.declare({ object: 'luci.ppoemanager', method: 'get_users',  expect: {} });
+var callGetUserMeta = rpc.declare({ object: 'luci.ppoemanager', method: 'get_user_meta', expect: {} });
+var callExtendUser  = rpc.declare({ object: 'luci.ppoemanager', method: 'extend_user', params: ['user','days'], expect: {} });
+var callSetUserMeta = rpc.declare({ object: 'luci.ppoemanager', method: 'set_user_meta', params: ['user','price','notes'], expect: {} });
 var callGetOnline   = rpc.declare({ object: 'luci.ppoemanager', method: 'get_online', expect: {} });
 var callAddUser     = rpc.declare({ object: 'luci.ppoemanager', method: 'add_user',   params: ['user','passwd','ipaddr','expiry'], expect: {} });
 var callEditUser    = rpc.declare({ object: 'luci.ppoemanager', method: 'edit_user',  params: ['olduser','user','passwd','ipaddr','expiry'], expect: {} });
@@ -31,49 +34,115 @@ function fmtDuration(s) { s = parseInt(s); if (isNaN(s)||s<0) return '-'; var h=
 // USERS MANAGER TAB
 // ============================================================
 var UsersTab = {
-    render: function(data) {
+    render: function(data, metaData) {
         var users = (data[0] && Array.isArray(data[0].accounts)) ? data[0].accounts : [];
+        var meta = (metaData && metaData.meta) ? metaData.meta : {};
         var now = Math.floor(Date.now()/1000);
-        var rows = users.map(function(u,i){
-            var expired = now > parseInt(u.expiry);
+
+        // Billing summary
+        var totalUsers = users.length;
+        var activeUsers = 0, expiredUsers = 0, monthlyTotal = 0, collectedTotal = 0;
+        users.forEach(function(u){
             var clean = u.user.replace(/^#/,'');
+            var expired = now > parseInt(u.expiry);
+            if (expired) expiredUsers++; else activeUsers++;
+            var m = meta[clean];
+            if (m && m.price) {
+                var p = parseFloat(String(m.price).replace(/[^0-9.]/g,''));
+                if (!isNaN(p)) monthlyTotal += p;
+            }
+            if (m && m.total_paid) {
+                var cp = parseFloat(String(m.total_paid).replace(/[^0-9.]/g,''));
+                if (!isNaN(cp)) collectedTotal += cp;
+            }
+        });
+
+        var summaryBlock = E('div', {'class': 'cbi-section', 'style': 'background:#1a3a1a;padding:12px;border-radius:4px;margin-bottom:15px'}, [
+            E('div', {'style': 'display:flex;gap:30px;flex-wrap:wrap'}, [
+                E('div', {}, [E('strong', {}, _('Total users: ')), String(totalUsers)]),
+                E('div', {}, [E('strong', {}, _('Active: ')), E('span', {'style':'color:green'}, String(activeUsers))]),
+                E('div', {}, [E('strong', {}, _('Expired: ')), E('span', {'style':'color:red'}, String(expiredUsers))]),
+                E('div', {}, [E('strong', {}, _('MRR: ')), E('span', {'style':'color:gold;font-weight:bold'}, monthlyTotal ? monthlyTotal.toFixed(2) : '0')]),
+                E('div', {}, [E('strong', {}, _('Collected: ')), E('span', {'style':'color:lime;font-weight:bold'}, collectedTotal ? collectedTotal.toFixed(2) : '0')])
+            ])
+        ]);
+
+        var rows = users.map(function(u,i){
+            var clean = u.user.replace(/^#/,'');
+            var expired = now > parseInt(u.expiry);
             var status = expired ? 'Expired' : 'Active';
             var color = expired ? 'red' : 'green';
+            var m = meta[clean] || {};
+            var added = m.first_seen ? new Date(parseInt(m.first_seen)*1000).toISOString().slice(0,10) : '-';
+
             return [
-                i+1, tsToDateStr(u.expiry), clean, u.password, u.ipaddr,
+                i+1,
+                tsToDateStr(u.expiry),
+                clean,
+                u.ipaddr,
+                m.price || '-',
+                added,
                 E('span',{style:'color:'+color+';font-weight:bold'},status),
-                E('div',{'class':'center'},[
-                    E('button',{'class':'btn cbi-button-edit','click':function(){ UsersTab.showEdit(clean, u.password, u.ipaddr, u.expiry); }},_('Edit')),' ',
-                    E('button',{'class':'btn cbi-button-remove important','click':function(){ UsersTab.handleDelete(clean); }},_('Delete'))
+                E('div',{'class':'center','style':'white-space:nowrap'},[
+                    E('button',{'class':'btn cbi-button-action','style':'margin-right:3px','title':_('Extend 3 days'),
+                        'click':L.bind(function(){ UsersTab.quickExtend(clean,3); },this)},'+3d'),
+                    E('button',{'class':'btn cbi-button-action','style':'margin-right:3px','title':_('Extend 7 days'),
+                        'click':L.bind(function(){ UsersTab.quickExtend(clean,7); },this)},'+7d'),
+                    E('button',{'class':'btn cbi-button-action','style':'margin-right:3px','title':_('Extend 1 month'),
+                        'click':L.bind(function(){ UsersTab.quickExtend(clean,30); },this)},'+1mo'),
+                    E('button',{'class':'btn cbi-button-action','style':'margin-right:8px','title':_('Extend 2 months'),
+                        'click':L.bind(function(){ UsersTab.quickExtend(clean,60); },this)},'+2mo'),
+                    E('button',{'class':'btn cbi-button-edit','style':'margin-right:3px',
+                        'click':L.bind(function(){ UsersTab.showEdit(clean, u.password, u.ipaddr, u.expiry, m); },this)},_('Edit')),
+                    E('button',{'class':'btn cbi-button-remove important',
+                        'click':L.bind(function(){ UsersTab.handleDelete(clean); },this)},_('Del'))
                 ])
             ];
         });
+
         var table = E('table',{'class':'table cbi-section-table','id':'ut'},[
             E('tr',{'class':'tr table-titles'},[
                 E('th',{'class':'th'},_('No.')),
                 E('th',{'class':'th'},_('Expiration')),
                 E('th',{'class':'th'},_('User')),
-                E('th',{'class':'th'},_('Password')),
                 E('th',{'class':'th'},_('IP Address')),
+                E('th',{'class':'th'},_('Price')),
+                E('th',{'class':'th'},_('Added')),
                 E('th',{'class':'th'},_('Status')),
                 E('th',{'class':'th'},_('Actions'))
             ])
         ]);
         cbi_update_table(table, rows, E('em',_('No users configured.')));
+
         return E('div',{'class':'cbi-section'},[
             E('h3',_('Users Manager')),
-            E('p',{'class':'cbi-section-descr'},_('Manage PPPoE accounts. Each user has an expiration date — expired accounts are automatically blocked by the hourly checker script.')),
-            E('button',{'class':'btn cbi-button-positive important','click':UsersTab.showAdd},_('Add User')),
+            summaryBlock,
+            E('button',{'class':'btn cbi-button-positive important','click':L.bind(this.showAdd,this)},_('Add User')),
             E('p'),table
         ]);
     },
+
+    quickExtend: function(user, days) {
+        if (!confirm('Extend "'+user+'" by '+days+' days?')) return;
+        callExtendUser(user, String(days)).then(function(r){
+            if (!r || r.result !== true) {
+                alert('Extend failed: ' + ((r && r.error) || 'unknown'));
+                return;
+            }
+            ui.addNotification(null, E('p', _('Extended ')+user+' by '+days+' days'));
+            setTimeout(function(){ location.reload(); }, 800);
+        });
+    },
+
     showAdd: function() {
         ui.showModal(_('Add PPPoE User'), [
             E('div',{'class':'left','style':'display:flex;flex-direction:column;gap:8px;padding:10px'},[
                 E('label',{},[_('Username: '),E('input',{id:'nu','class':'cbi-input-text',style:'width:250px'})]),
                 E('label',{},[_('Password: '),E('input',{id:'np','class':'cbi-input-text',style:'width:250px'})]),
                 E('label',{},[_('Static IP (blank=auto): '),E('input',{id:'ni','class':'cbi-input-text',style:'width:250px',placeholder:'e.g. 192.168.12.15'})]),
-                E('label',{},[_('Expiration: '),E('input',{id:'ne',type:'date','class':'cbi-input-text',style:'width:250px'})])
+                E('label',{},[_('Expiration: '),E('input',{id:'ne',type:'date','class':'cbi-input-text',style:'width:250px'})]),
+                E('label',{},[_('Price (optional): '),E('input',{id:'nprice','class':'cbi-input-text',style:'width:250px',placeholder:'e.g. 500'})]),
+                E('label',{},[_('Notes (optional): '),E('input',{id:'nnotes','class':'cbi-input-text',style:'width:250px'})])
             ]),
             E('div',{'class':'right'},[
                 E('button',{'class':'btn','click':ui.hideModal},_('Cancel')),' ',
@@ -82,31 +151,40 @@ var UsersTab = {
                     var p=document.getElementById('np').value;
                     var i=document.getElementById('ni').value.trim();
                     var e=document.getElementById('ne').value;
+                    var pr=document.getElementById('nprice').value.trim();
+                    var nt=document.getElementById('nnotes').value.trim();
                     if(!u||!p||!e){alert('Username, Password, Expiration required');return;}
                     var ets=Math.floor(new Date(e).getTime()/1000);
                     if(ets <= Math.floor(Date.now()/1000)){alert('Expiration must be in future');return;}
                     callAddUser(u,p,i||'*',ets.toString()).then(function(r){
                         if (!r || r.result !== true) {
-                            var err = (r && r.error) ? r.error : 'unknown error';
-                            alert('Add failed: ' + err);
+                            alert('Add failed: ' + ((r && r.error) || 'unknown'));
                             return;
                         }
-                        location.reload();
-                    }).catch(function(e) {
-                        alert('RPC error: ' + (e && e.message ? e.message : e));
+                        if (pr || nt) {
+                            callSetUserMeta(u, pr, nt).then(function(){ location.reload(); });
+                        } else {
+                            location.reload();
+                        }
+                    }).catch(function(err) {
+                        alert('RPC error: ' + (err && err.message ? err.message : err));
                     });
                 }},_('Add'))
             ])
         ]);
     },
-    showEdit: function(user, pass, ip, expiry) {
+
+    showEdit: function(user, pass, ip, expiry, meta) {
         var d = new Date(parseInt(expiry)*1000).toISOString().slice(0,10);
+        meta = meta || {};
         ui.showModal(_('Edit User: ')+user, [
             E('div',{'class':'left','style':'display:flex;flex-direction:column;gap:8px;padding:10px'},[
                 E('label',{},[_('Username: '),E('input',{id:'eu','class':'cbi-input-text',value:user,style:'width:250px'})]),
                 E('label',{},[_('Password: '),E('input',{id:'ep','class':'cbi-input-text',value:pass,style:'width:250px'})]),
                 E('label',{},[_('Static IP: '),E('input',{id:'ei','class':'cbi-input-text',value:ip,style:'width:250px'})]),
-                E('label',{},[_('Expiration: '),E('input',{id:'ee',type:'date','class':'cbi-input-text',value:d,style:'width:250px'})])
+                E('label',{},[_('Expiration: '),E('input',{id:'ee',type:'date','class':'cbi-input-text',value:d,style:'width:250px'})]),
+                E('label',{},[_('Price: '),E('input',{id:'eprice','class':'cbi-input-text',value:meta.price||'',style:'width:250px'})]),
+                E('label',{},[_('Notes: '),E('input',{id:'enotes','class':'cbi-input-text',value:meta.notes||'',style:'width:250px'})])
             ]),
             E('div',{'class':'right'},[
                 E('button',{'class':'btn','click':ui.hideModal},_('Cancel')),' ',
@@ -115,13 +193,18 @@ var UsersTab = {
                     var p=document.getElementById('ep').value;
                     var i=document.getElementById('ei').value.trim();
                     var e=document.getElementById('ee').value;
+                    var pr=document.getElementById('eprice').value.trim();
+                    var nt=document.getElementById('enotes').value.trim();
                     if(!n||!p||!e){alert('All fields required');return;}
                     var ets=Math.floor(new Date(e).getTime()/1000);
-                    callEditUser(user,n,p,i,ets.toString()).then(function(){location.reload();});
+                    callEditUser(user,n,p,i,ets.toString()).then(function(){
+                        callSetUserMeta(n, pr, nt).then(function(){ location.reload(); });
+                    });
                 }},_('Save'))
             ])
         ]);
     },
+
     handleDelete: function(user) {
         if (!confirm('Delete user "'+user+'"?')) return;
         callDelUser(user).then(function(){ location.reload(); });
@@ -660,16 +743,17 @@ function validateConfig() {
 // ============================================================
 return view.extend({
     load: function() {
-        return Promise.all([callGetUsers(), callGetOnline(), callFwStatus(), uci.load('ppoemanager'), uci.load('network')]);
+        return Promise.all([callGetUsers(), callGetOnline(), callFwStatus(), callGetUserMeta(), uci.load('ppoemanager'), uci.load('network')]);
     },
     render: function(data) {
         var self = this;
         var fwStatus = data[2] || {};
+        var metaData = data[3] || {};
         var warnings = validateConfig();
 
         var tabs = [
             { id: 'settings', name: _('General Settings'), render: function() { return SettingsTab.render(fwStatus); } },
-            { id: 'users',    name: _('Users Manager'),    render: function() { return UsersTab.render(data); } },
+            { id: 'users',    name: _('Users Manager'),    render: function() { return UsersTab.render(data, metaData); } },
             { id: 'online',   name: _('Online Users'),     render: function() { return OnlineTab.render(data); } },
             { id: 'advanced', name: _('Advanced'),         render: function() { return AdvancedTab.render(); } },
             { id: 'help',     name: _('Help'),             render: function() { return HelpTab.render(); } }

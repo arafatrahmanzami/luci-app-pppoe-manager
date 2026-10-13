@@ -2,6 +2,7 @@
 import { open, popen } from 'fs';
 
 const DB_FILE = '/lib/ppp/ppp-users';
+const META_FILE = '/lib/ppp/ppoemanager-meta';
 const SECRETS_FILE = '/etc/ppp/chap-secrets';
 
 // Strip leading #s from a username (works on both "#user" and "##user")
@@ -10,6 +11,56 @@ function clean_user(u) {
     let out = u;
     while (substr(out, 0, 1) == '#') out = substr(out, 1);
     return out;
+}
+
+// Read per-user metadata: username|price|notes|first_seen|last_seen|sessions|total_seconds
+function read_meta() {
+    const meta = {};
+    const f = open(META_FILE, 'r');
+    if (!f) return meta;
+    for (let line = f.read('line'); length(line); line = f.read('line')) {
+        const parts = split(trim(line), '|', 8);
+        if (length(parts) >= 1 && length(parts[0])) {
+            meta[parts[0]] = {
+                user: parts[0],
+                price: parts[1] || '',
+                notes: parts[2] || '',
+                first_seen: parts[3] || '',
+                last_seen: parts[4] || '',
+                sessions: parts[5] || '0',
+                total_seconds: parts[6] || '0',
+                total_paid: parts[7] || '0'
+            };
+        }
+    }
+    f.close();
+    return meta;
+}
+
+function write_meta(meta) {
+    const lines = [];
+    for (let u in meta) {
+        const m = meta[u];
+        push(lines, `${u}|${m.price || ''}|${m.notes || ''}|${m.first_seen || ''}|${m.last_seen || ''}|${m.sessions || '0'}|${m.total_seconds || '0'}|${m.total_paid || '0'}`);
+    }
+    const tmp = META_FILE + '.tmp';
+    system(`: > ${tmp}`);
+    for (let i = 0; i < length(lines); i++) {
+        const l = replace(lines[i], /'/g, "'\\''");
+        system(`echo '${l}' >> ${tmp}`);
+    }
+    system(`mv ${tmp} ${META_FILE}`);
+}
+
+function ensure_meta(user, meta) {
+    if (!meta[user]) {
+        meta[user] = {
+            user: user, price: '', notes: '',
+            first_seen: `${time()}`, last_seen: '',
+            sessions: '0', total_seconds: '0', total_paid: '0'
+        };
+    }
+    return meta[user];
 }
 
 function read_users() {
@@ -140,6 +191,100 @@ function get_subnet_base() {
 
 const methods = {
     get_users: { call: function() { return { accounts: read_users() }; } },
+    get_user_meta: {
+        call: function() {
+            return { meta: read_meta() };
+        }
+    },
+
+    set_user_meta: {
+        args: { user: 'user', price: 'price', notes: 'notes' },
+        call: function(req) {
+            const user = clean_user(trim(req.args.user));
+            const price = trim(req.args.price || '');
+            const notes = trim(req.args.notes || '');
+            if (!length(user)) return { result: false, error: 'missing_user' };
+
+            const meta = read_meta();
+            const m = ensure_meta(user, meta);
+            const oldPrice = m.price;
+            m.price = price;
+            m.notes = notes;
+            if (!length(m.first_seen)) m.first_seen = `${time()}`;
+
+            if (length(price) && price != oldPrice) {
+                const p = +price;
+                if (p > 0) {
+                    const prev = +m.total_paid;
+                    const newTotal = prev + p;
+                    m.total_paid = `${int(newTotal * 100) / 100}`;
+                }
+            }
+
+            write_meta(meta);
+            return { result: true, total_paid: m.total_paid };
+        }
+    },
+    extend_user: {
+        args: { user: 'user', days: 'days' },
+        call: function(req) {
+            const user = clean_user(trim(req.args.user));
+            const days = int(trim(req.args.days));
+            if (!length(user) || !days) return { result: false, error: 'missing_args' };
+
+            const users = read_users();
+            let found = false;
+            const newUsers = [];
+            const now = time();
+
+            for (let i = 0; i < length(users); i++) {
+                const u = users[i];
+                if (clean_user(u.user) == user) {
+                    found = true;
+                    let base = int(u.expiry);
+                    if (base < now) base = now;
+                    const newExpiry = base + (days * 86400);
+                    push(newUsers, {
+                        expiry: `${newExpiry}`,
+                        user: u.user,
+                        password: u.password,
+                        ipaddr: u.ipaddr,
+                        id: u.id
+                    });
+                } else {
+                    push(newUsers, u);
+                }
+            }
+            if (!found) return { result: false, error: 'user_not_found' };
+
+            const tmp = DB_FILE + '.tmp';
+            system(`: > ${tmp}`);
+            for (let i = 0; i < length(newUsers); i++) {
+                const u = newUsers[i];
+                const l = replace(`${u.expiry}|${u.user}|${u.password}|${u.ipaddr}|${u.id}`, /'/g, "'\\''");
+                system(`echo '${l}' >> ${tmp}`);
+            }
+            system(`mv ${tmp} ${DB_FILE}`);
+
+            // Meta: last_seen + cumulative payment
+            const meta = read_meta();
+            const m = ensure_meta(user, meta);
+            m.last_seen = `${now}`;
+            if (length(m.price)) {
+                const p = +m.price;
+                if (p > 0) {
+                    const payment = (p * days) / 30;
+                    const prev = +m.total_paid;
+                    const newTotal = prev + payment;
+                    m.total_paid = `${int(newTotal * 100) / 100}`;
+                }
+            }
+            write_meta(meta);
+
+            system('/etc/init.d/ppoemanager restart >/dev/null 2>&1 &');
+            return { result: true, days: days, user: user, paid: m.total_paid };
+        }
+    },
     get_online: { call: function() { return { sessions: read_online() }; } },
     get_status: {
         call: function() {
@@ -313,6 +458,13 @@ const methods = {
 
             system(`echo '${expiry}|${userClean}|${passwd}|${ip}|${id}' >> ${DB_FILE}`);
             system(`echo '${userClean} * ${passwd} ${ip}' >> ${SECRETS_FILE}`);
+
+            // Initialize meta with first_seen
+            const meta = read_meta();
+            const m = ensure_meta(userClean, meta);
+            m.first_seen = `${time()}`;
+            write_meta(meta);
+
             system('/etc/init.d/ppoemanager restart >/dev/null 2>&1 &');
             return { result: true, ip: ip, id: id };
         }
@@ -346,6 +498,12 @@ const methods = {
             const userClean = clean_user(trim(req.args.user));
             if (!length(userClean)) return { result: false };
             purge_user(userClean);
+            // Remove meta entry
+            const meta = read_meta();
+            if (meta[userClean]) {
+                delete meta[userClean];
+                write_meta(meta);
+            }
             system('/etc/init.d/ppoemanager restart >/dev/null 2>&1 &');
             return { result: true };
         }
