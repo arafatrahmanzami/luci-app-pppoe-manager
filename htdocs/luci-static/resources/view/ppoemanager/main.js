@@ -57,13 +57,13 @@ var UsersTab = {
             }
         });
 
-        var summaryBlock = E('div', {'class': 'cbi-section', 'style': 'background:#1a3a1a;padding:12px;border-radius:4px;margin-bottom:15px'}, [
+        var summaryBlock = E('div', {'class': 'cbi-section', 'style': 'padding:12px;border-radius:4px;margin-bottom:15px'}, [
             E('div', {'style': 'display:flex;gap:30px;flex-wrap:wrap'}, [
                 E('div', {}, [E('strong', {}, _('Total users: ')), String(totalUsers)]),
                 E('div', {}, [E('strong', {}, _('Active: ')), E('span', {'style':'color:green'}, String(activeUsers))]),
                 E('div', {}, [E('strong', {}, _('Expired: ')), E('span', {'style':'color:red'}, String(expiredUsers))]),
-                E('div', {}, [E('strong', {}, _('MRR: ')), E('span', {'style':'color:gold;font-weight:bold'}, monthlyTotal ? monthlyTotal.toFixed(2) : '0')]),
-                E('div', {}, [E('strong', {}, _('Collected: ')), E('span', {'style':'color:lime;font-weight:bold'}, collectedTotal ? collectedTotal.toFixed(2) : '0')])
+                E('div', {}, [E('strong', {}, _('MRR: ')), E('span', {'style':'color:#f57c00;font-weight:bold'}, monthlyTotal ? monthlyTotal.toFixed(2) : '0')]),
+                E('div', {}, [E('strong', {}, _('Collected: ')), E('span', {'style':'color:#0288d1;font-weight:bold'}, collectedTotal ? collectedTotal.toFixed(2) : '0')])
             ])
         ]);
 

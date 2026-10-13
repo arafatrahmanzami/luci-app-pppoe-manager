@@ -15,6 +15,14 @@ Versioning follows [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 - accel-ppp engine integration
 
 
+## [1.1.0-r18] — 2026-10-13
+
+### Fixed
+- **Light theme visibility** — summary bar in Users Manager used hardcoded dark green background (`#1a3a1a`) with lime/gold text, invisible in Bootstrap light theme. Removed background; swapped colors to `#f57c00` (amber for MRR) and `#0288d1` (teal for Collected) which read correctly in both light and dark themes.
+
+## [1.1.0-r17] — 2026-10-13
+
+
 
 ## [1.1.0-r17] — 2026-10-13
 
