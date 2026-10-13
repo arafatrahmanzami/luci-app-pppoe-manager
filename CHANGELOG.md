@@ -14,6 +14,42 @@ Versioning follows [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 - RADIUS authentication backend
 - accel-ppp engine integration
 
+
+
+## [1.1.0-r17] — 2026-10-13
+
+### Added
+- **Revenue tracking** — cumulative payment counter per user
+  - `total_paid` field in `/lib/ppp/ppoemanager-meta`
+  - `extend_user` adds `price × days/30` to `total_paid`
+  - `set_user_meta` adds new price to `total_paid` when price changes
+- **Collected** summary in Users Manager — cumulative revenue across all users
+- Renamed `Monthly revenue` to `MRR` (Monthly Recurring Revenue)
+
+### Fixed
+- Restored missing `set_user_meta` RPC method that was dropped by an earlier attempt
+
+
+
+## [1.1.0-r16] — 2026-10-13
+
+### Added
+- **User Extensions** — quick extend buttons (+3d, +7d, +1mo, +2mo) in Users Manager tab
+- **Billing fields** — per-user Price and Notes
+- **Billing summary bar** — Total / Active / Expired / Monthly revenue at top of Users tab
+- **First added date** — captured on user creation, shown as "Added" column
+- New RPC methods: `extend_user`, `set_user_meta`, `get_user_meta`
+- Metadata file `/lib/ppp/ppoemanager-meta` — stores per-user price, notes, first_seen, last_seen
+
+### Fixed
+- `extend_user` RPC rejected when days argument passed as JS number — LuCI ubus bridge requires String type. Now converts via `String(days)` in `quickExtend()`.
+
+### Changed
+- Users Manager table adds columns: Price, Added
+- Users Manager actions per row: +3d, +7d, +1mo, +2mo, Edit, Del
+
+
+
 ## [1.1.0-r14] — 2026-10-12
 
 ### Fixed
@@ -23,6 +59,8 @@ Versioning follows [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 ### Added
 - get_offload_mode RPC method
 - apply_offloading now accepts optional mode argument
+
+
 
 ## [1.1.0-r11] — 2026-10-12
 
@@ -46,11 +84,13 @@ Versioning follows [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 - Backwards compatible with r10 and earlier
 - No config changes required
 
+
 ## [1.1.0-r10] — 2026-10-11
 
 ### Fixed
 - `/lib/ppp` directory missing on OpenWrt 25.12 / apk installs — added
   `mkdir -p /lib/ppp` to `uci-defaults/99-ppoemanager`
+
 
 ## [1.1.0-r9] — 2026-10-11
 
@@ -63,6 +103,7 @@ Versioning follows [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ### Added
 - Distinct error codes: `missing_user`, `missing_password`, `missing_expiry`, `username_exists`
+
 
 ## [1.1.0-r5] — 2026-10-10
 
