@@ -28,6 +28,25 @@ var callSetOffload = rpc.declare({ object: 'luci.ppoemanager', method: 'apply_of
 var callGetOffload = rpc.declare({ object: 'luci.ppoemanager', method: 'get_offload_mode', expect: {} });
 
 function tsToDateStr(ts) { var d = new Date(parseInt(ts)*1000); return d.toISOString().slice(0,10); }
+function fmtBytes(n) {
+    n = parseInt(n) || 0;
+    if (n < 1024) return n + ' B';
+    if (n < 1048576) return (n/1024).toFixed(1) + ' KB';
+    if (n < 1073741824) return (n/1048576).toFixed(1) + ' MB';
+    if (n < 1099511627776) return (n/1073741824).toFixed(2) + ' GB';
+    return (n/1099511627776).toFixed(2) + ' TB';
+}
+
+function fmtRate(bps) {
+    bps = parseInt(bps) || 0;
+    if (bps < 1000) return bps + ' B/s';
+    if (bps < 1000000) return (bps/1000).toFixed(1) + ' KB/s';
+    if (bps < 1000000000) return (bps/1000000).toFixed(2) + ' MB/s';
+    return (bps/1000000000).toFixed(2) + ' GB/s';
+}
+
+var _lastSample = {};
+
 function fmtDuration(s) { s = parseInt(s); if (isNaN(s)||s<0) return '-'; var h=Math.floor(s/3600), m=Math.floor((s%3600)/60); return h+'h '+m+'m'; }
 
 // ============================================================
@@ -82,6 +101,8 @@ var UsersTab = {
                 u.ipaddr,
                 m.price || '-',
                 added,
+                fmtBytes(m.total_tx),
+                fmtBytes(m.total_rx),
                 E('span',{style:'color:'+color+';font-weight:bold'},status),
                 E('div',{'class':'center','style':'white-space:nowrap'},[
                     E('button',{'class':'btn cbi-button-action','style':'margin-right:3px','title':_('Extend 3 days'),
@@ -108,6 +129,8 @@ var UsersTab = {
                 E('th',{'class':'th'},_('IP Address')),
                 E('th',{'class':'th'},_('Price')),
                 E('th',{'class':'th'},_('Added')),
+                E('th',{'class':'th'},_('\u2193 Download')),
+                E('th',{'class':'th'},_('\u2191 Upload')),
                 E('th',{'class':'th'},_('Status')),
                 E('th',{'class':'th'},_('Actions'))
             ])
@@ -217,9 +240,32 @@ var UsersTab = {
 var OnlineTab = {
     render: function(data) {
         var sess = (data[1] && Array.isArray(data[1].sessions)) ? data[1].sessions : [];
+
+        // Compute per-session rate from delta since last poll
+        var now = Date.now();
+        sess.forEach(function(s){
+            var rx = parseInt(s.rx) || 0;
+            var tx = parseInt(s.tx) || 0;
+            var prev = _lastSample[s.pid];
+            if (prev) {
+                var dt = (now - prev.ts) / 1000;
+                if (dt > 0) {
+                    s._rate_rx = Math.max(0, Math.round((rx - prev.rx) / dt));
+                    s._rate_tx = Math.max(0, Math.round((tx - prev.tx) / dt));
+                } else { s._rate_rx = 0; s._rate_tx = 0; }
+            } else { s._rate_rx = 0; s._rate_tx = 0; }
+            _lastSample[s.pid] = { rx: rx, tx: tx, ts: now };
+        });
+        // Prune stale pids
+        var _active = {};
+        sess.forEach(function(s){ _active[s.pid] = 1; });
+        Object.keys(_lastSample).forEach(function(k){ if (!_active[k]) delete _lastSample[k]; });
+
         var rows = sess.map(function(s,i){
             return [
                 i+1, s.username||'?', s.cip||'-', s.mac||'-', s.gateway||'-', fmtDuration(s.duration),
+                fmtRate(s._rate_tx), fmtRate(s._rate_rx),
+                fmtBytes(s.tx||0), fmtBytes(s.rx||0),
                 E('button',{'class':'btn cbi-button-negative important','click':function(){
                     if(!confirm('Disconnect '+s.cip+' ('+s.username+')?')) return;
                     callKill(s.pid).then(function(){ setTimeout(function(){ location.reload(); }, 800); });
@@ -234,6 +280,10 @@ var OnlineTab = {
                 E('th',{'class':'th'},_('MAC')),
                 E('th',{'class':'th'},_('Server IP')),
                 E('th',{'class':'th'},_('Duration')),
+                E('th',{'class':'th'},_('\u2193 Speed')),
+                E('th',{'class':'th'},_('\u2191 Speed')),
+                E('th',{'class':'th'},_('\u2193 Session')),
+                E('th',{'class':'th'},_('\u2191 Session')),
                 E('th',{'class':'th'},_('Actions'))
             ])
         ]);
@@ -753,7 +803,7 @@ return view.extend({
 
         var tabs = [
             { id: 'settings', name: _('General Settings'), render: function() { return SettingsTab.render(fwStatus); } },
-            { id: 'users',    name: _('Users Manager'),    render: function() { return UsersTab.render(data, metaData); } },
+            { id: 'users',    name: _('Users Manager'),    render: function() { return UsersTab.render(data, data[3] || {}); } },
             { id: 'online',   name: _('Online Users'),     render: function() { return OnlineTab.render(data); } },
             { id: 'advanced', name: _('Advanced'),         render: function() { return AdvancedTab.render(); } },
             { id: 'help',     name: _('Help'),             render: function() { return HelpTab.render(); } }
@@ -800,9 +850,10 @@ return view.extend({
         draw();
 
         poll.add(L.bind(function(){
-            return callGetOnline().then(function(nd){
-                data[1] = nd;
-                if (currentTab === 'online') draw();
+            return Promise.all([callGetOnline(), callGetUserMeta()]).then(function(res){
+                data[1] = res[0];
+                data[3] = res[1];
+                if (currentTab === 'online' || currentTab === 'users') draw();
             });
         }, this), 5);
 

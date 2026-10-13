@@ -3,11 +3,16 @@ NOW=$(date +%s)
 DB_FILE="/lib/ppp/ppp-users"
 TMP_FILE="/lib/ppp/ppp-users.tmp"
 SECRETS_FILE="/etc/ppp/chap-secrets"
+META_FILE="/lib/ppp/ppoemanager-meta"
+SESSION_FILE="/lib/ppp/ppoemanager-session"
+SESSION_TMP="/lib/ppp/ppoemanager-session.tmp"
 
 [ ! -f "$DB_FILE" ] && exit 1
 touch "$TMP_FILE"
+
 echo "PPPoE-Mgr: Running expiry check..."
 
+# ---- Expiration check ----
 while IFS='|' read -r expiry username password ip id || [ -n "$expiry" ]; do
     [ -z "$username" ] && continue
     CLEAN_USER=$(echo "$username" | sed 's/^#//')
@@ -18,10 +23,8 @@ while IFS='|' read -r expiry username password ip id || [ -n "$expiry" ]; do
         echo "$expiry|$username|$password|$ip|$id" >> "$TMP_FILE"
         grep -q "^$CLEAN_USER\>" "$SECRETS_FILE" && sed -i "s/^$CLEAN_USER\>/#$CLEAN_USER/" "$SECRETS_FILE"
 
-        IFACE=$(ifconfig | grep -B 1 "P-t-P:$ip" | grep "ppp" | awk '{print $1}')
-        [ -z "$IFACE" ] && IFACE=$(ip addr | grep "$ip" | awk '{print $NF}')
-
-        if [ -n "$IFACE" ] && echo "$IFACE" | grep -q "ppp"; then
+        IFACE=$(ip -4 addr show 2>/dev/null | grep -B1 "peer $ip" | grep -oE 'ppp[0-9]+' | head -1)
+        if [ -n "$IFACE" ]; then
             PID=$(ps | grep "pppd" | grep "$IFACE" | grep -v grep | awk '{print $1}')
             [ -n "$PID" ] && kill -9 "$PID"
             ifconfig "$IFACE" down 2>/dev/null
@@ -32,6 +35,89 @@ while IFS='|' read -r expiry username password ip id || [ -n "$expiry" ]; do
         grep -q "^#$CLEAN_USER\>" "$SECRETS_FILE" && sed -i "s/^#$CLEAN_USER\>/$CLEAN_USER/" "$SECRETS_FILE"
     fi
 done < "$DB_FILE"
-
 mv "$TMP_FILE" "$DB_FILE"
+
+# ---- Usage tracking ----
+echo "PPPoE-Mgr: Tracking session usage..."
+
+# Build current active list: pid|iface|ip|user|rx|tx
+: > "$SESSION_TMP.active"
+for pid in $(pgrep -f "pppoe.so" 2>/dev/null); do
+    CMDLINE=$(tr '\0' ' ' < /proc/$pid/cmdline 2>/dev/null)
+    echo "$CMDLINE" | grep -q "ipparam" && continue
+
+    IFACE=""
+    for pfile in /run/pppd/ppp*.pid; do
+        [ -f "$pfile" ] || continue
+        if [ "$(cat $pfile 2>/dev/null)" = "$pid" ]; then
+            IFACE=$(basename $pfile .pid)
+            break
+        fi
+    done
+    [ -z "$IFACE" ] && continue
+
+    RX=$(cat /sys/class/net/$IFACE/statistics/rx_bytes 2>/dev/null || echo 0)
+    TX=$(cat /sys/class/net/$IFACE/statistics/tx_bytes 2>/dev/null || echo 0)
+
+    PEER=$(ip -4 addr show $IFACE 2>/dev/null | awk '/peer/{print $4}' | cut -d'/' -f1)
+    [ -z "$PEER" ] && continue
+
+    USER=$(awk -v ip="$PEER" '$4==ip && $1 !~ /^#/ { print $1; exit }' "$SECRETS_FILE")
+    [ -z "$USER" ] && USER="?"
+
+    echo "$pid|$IFACE|$PEER|$USER|$RX|$TX" >> "$SESSION_TMP.active"
+done
+
+# Process existing session file — merge with active
+: > "$SESSION_TMP"
+: > "$SESSION_TMP.ended"
+if [ -f "$SESSION_FILE" ]; then
+    while IFS='|' read -r pid iface ip user rx_base tx_base rx_last tx_last start_epoch; do
+        [ -z "$pid" ] && continue
+        if grep -q "^$pid|" "$SESSION_TMP.active"; then
+            NEW=$(grep "^$pid|" "$SESSION_TMP.active")
+            NEW_RX=$(echo "$NEW" | cut -d'|' -f5)
+            NEW_TX=$(echo "$NEW" | cut -d'|' -f6)
+            echo "$pid|$iface|$ip|$user|$rx_base|$tx_base|$NEW_RX|$NEW_TX|$start_epoch" >> "$SESSION_TMP"
+        else
+            DELTA_RX=$((rx_last - rx_base))
+            DELTA_TX=$((tx_last - tx_base))
+            echo "ENDED|$user|$DELTA_RX|$DELTA_TX" >> "$SESSION_TMP.ended"
+        fi
+    done < "$SESSION_FILE"
+fi
+
+# Add new sessions
+if [ -f "$SESSION_TMP.active" ]; then
+    while IFS='|' read -r pid iface ip user rx tx; do
+        [ -z "$pid" ] && continue
+        if [ -f "$SESSION_FILE" ]; then
+            if grep -q "^$pid|" "$SESSION_FILE" || grep -q "|$iface|" "$SESSION_FILE"; then
+                continue
+            fi
+        fi
+        echo "$pid|$iface|$ip|$user|0|0|$rx|$tx|$NOW" >> "$SESSION_TMP"
+    done < "$SESSION_TMP.active"
+fi
+mv "$SESSION_TMP" "$SESSION_FILE"
+rm -f "$SESSION_TMP.active"
+
+# ---- Commit ended deltas to meta ----
+if [ -f "$SESSION_TMP.ended" ] && [ -f "$META_FILE" ] && [ -s "$SESSION_TMP.ended" ]; then
+    cp "$META_FILE" "$META_FILE.tmp"
+    : > "$META_FILE.new"
+    while IFS='|' read -r user price notes first_seen last_seen sessions total_seconds total_paid total_rx total_tx; do
+        [ -z "$user" ] && continue
+        ADD_RX=$(awk -F'|' -v u="$user" '$2==u { s+=$3 } END { print s+0 }' "$SESSION_TMP.ended")
+        ADD_TX=$(awk -F'|' -v u="$user" '$2==u { s+=$4 } END { print s+0 }' "$SESSION_TMP.ended")
+        NEW_RX=$(( ${total_rx:-0} + ADD_RX ))
+        NEW_TX=$(( ${total_tx:-0} + ADD_TX ))
+        echo "$user|$price|$notes|$first_seen|$last_seen|$sessions|$total_seconds|$total_paid|$NEW_RX|$NEW_TX" >> "$META_FILE.new"
+    done < "$META_FILE.tmp"
+    mv "$META_FILE.new" "$META_FILE"
+    rm -f "$META_FILE.tmp"
+fi
+rm -f "$SESSION_TMP.ended"
+
+# ---- Flush conntrack ----
 conntrack -F 2>/dev/null

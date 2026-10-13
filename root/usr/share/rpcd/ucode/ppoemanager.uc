@@ -19,7 +19,7 @@ function read_meta() {
     const f = open(META_FILE, 'r');
     if (!f) return meta;
     for (let line = f.read('line'); length(line); line = f.read('line')) {
-        const parts = split(trim(line), '|', 8);
+        const parts = split(trim(line), '|', 10);
         if (length(parts) >= 1 && length(parts[0])) {
             meta[parts[0]] = {
                 user: parts[0],
@@ -29,7 +29,9 @@ function read_meta() {
                 last_seen: parts[4] || '',
                 sessions: parts[5] || '0',
                 total_seconds: parts[6] || '0',
-                total_paid: parts[7] || '0'
+                total_paid: parts[7] || '0',
+                total_rx: parts[8] || '0',
+                total_tx: parts[9] || '0'
             };
         }
     }
@@ -41,7 +43,7 @@ function write_meta(meta) {
     const lines = [];
     for (let u in meta) {
         const m = meta[u];
-        push(lines, `${u}|${m.price || ''}|${m.notes || ''}|${m.first_seen || ''}|${m.last_seen || ''}|${m.sessions || '0'}|${m.total_seconds || '0'}|${m.total_paid || '0'}`);
+        push(lines, `${u}|${m.price || ''}|${m.notes || ''}|${m.first_seen || ''}|${m.last_seen || ''}|${m.sessions || '0'}|${m.total_seconds || '0'}|${m.total_paid || '0'}|${m.total_rx || '0'}|${m.total_tx || '0'}`);
     }
     const tmp = META_FILE + '.tmp';
     system(`: > ${tmp}`);
@@ -57,7 +59,7 @@ function ensure_meta(user, meta) {
         meta[user] = {
             user: user, price: '', notes: '',
             first_seen: `${time()}`, last_seen: '',
-            sessions: '0', total_seconds: '0', total_paid: '0'
+            sessions: '0', total_seconds: '0', total_paid: '0', total_rx: '0', total_tx: '0'
         };
     }
     return meta[user];
@@ -168,6 +170,47 @@ function read_online() {
         });
     }
     psOut.close();
+
+    // Step 4: compute live rx/tx from sysfs (fresh on every call)
+    // Match session file by pid first (same-session), fall back to iface (reconnect)
+    const baseByPid = {};
+    const baseByIface = {};
+    const sessFile = open('/lib/ppp/ppoemanager-session', 'r');
+    if (sessFile) {
+        for (let line = sessFile.read('line'); length(line); line = sessFile.read('line')) {
+            const parts = split(trim(line), '|', 9);
+            if (length(parts) >= 9) {
+                const b = { rx_base: int(parts[4]), tx_base: int(parts[5]) };
+                baseByPid[parts[0]] = b;
+                baseByIface[parts[1]] = b;
+            }
+        }
+        sessFile.close();
+    }
+
+    for (let i = 0; i < length(sessions); i++) {
+        const s = sessions[i];
+        if (!length(s.iface)) { s.rx = '0'; s.tx = '0'; continue; }
+        let cur_rx = 0, cur_tx = 0;
+        const frx = open(`/sys/class/net/${s.iface}/statistics/rx_bytes`, 'r');
+        if (frx) { cur_rx = int(trim(frx.read('all'))) || 0; frx.close(); }
+        const ftx = open(`/sys/class/net/${s.iface}/statistics/tx_bytes`, 'r');
+        if (ftx) { cur_tx = int(trim(ftx.read('all'))) || 0; ftx.close(); }
+        const b = baseByPid[s.pid];
+        if (b) {
+            let rx = cur_rx - b.rx_base;
+            let tx = cur_tx - b.tx_base;
+            if (rx < 0) rx = 0;
+            if (tx < 0) tx = 0;
+            s.rx = `${rx}`;
+            s.tx = `${tx}`;
+        } else {
+            // Fresh session — checker hasn't seen it yet. Show sysfs directly.
+            s.rx = `${cur_rx}`;
+            s.tx = `${cur_tx}`;
+        }
+    }
+
     return sessions;
 }
 
@@ -193,7 +236,36 @@ const methods = {
     get_users: { call: function() { return { accounts: read_users() }; } },
     get_user_meta: {
         call: function() {
-            return { meta: read_meta() };
+            const meta = read_meta();
+            // Overlay live bytes from session file (deterministic, no shell races)
+            const sessFile = open('/lib/ppp/ppoemanager-session', 'r');
+            if (sessFile) {
+                for (let line = sessFile.read('line'); length(line); line = sessFile.read('line')) {
+                    const parts = split(trim(line), '|', 9);
+                    if (length(parts) < 9) continue;
+                    const iface = parts[1];
+                    const user = parts[3];
+                    if (!length(iface) || !length(user)) continue;
+
+                    let cur_rx = 0;
+                    let cur_tx = 0;
+                    const rxP = popen("cat /sys/class/net/" + iface + "/statistics/rx_bytes 2>/dev/null");
+                    if (rxP) { const v = trim(rxP.read('all')); rxP.close(); if (length(v)) cur_rx = int(v); }
+                    const txP = popen("cat /sys/class/net/" + iface + "/statistics/tx_bytes 2>/dev/null");
+                    if (txP) { const v = trim(txP.read('all')); txP.close(); if (length(v)) cur_tx = int(v); }
+
+                    if (!meta[user]) {
+                        meta[user] = { user: user, price: '', notes: '', first_seen: '', last_seen: '',
+                                       sessions: '0', total_seconds: '0', total_paid: '0',
+                                       total_rx: '0', total_tx: '0' };
+                    }
+                    const m = meta[user];
+                    m.total_rx = "" + (int(m.total_rx) + cur_rx);
+                    m.total_tx = "" + (int(m.total_tx) + cur_tx);
+                }
+                sessFile.close();
+            }
+            return { meta: meta };
         }
     },
 
@@ -223,6 +295,29 @@ const methods = {
 
             write_meta(meta);
             return { result: true, total_paid: m.total_paid };
+        }
+    },
+    get_session_usage: {
+        call: function() {
+            const out = [];
+            const p = popen("cat /lib/ppp/ppoemanager-session 2>/dev/null");
+            if (p) {
+                for (let line = p.read('line'); length(line); line = p.read('line')) {
+                    const parts = split(trim(line), '|', 9);
+                    if (length(parts) < 9) continue;
+                    push(out, {
+                        pid: parts[0],
+                        iface: parts[1],
+                        ip: parts[2],
+                        user: parts[3],
+                        rx: parts[6],
+                        tx: parts[7],
+                        start: parts[8]
+                    });
+                }
+                p.close();
+            }
+            return { sessions: out };
         }
     },
     extend_user: {

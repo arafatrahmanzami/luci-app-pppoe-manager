@@ -15,12 +15,32 @@ Versioning follows [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 - accel-ppp engine integration
 
 
+
+
+## [1.1.0-r19] — 2026-10-13
+
+### Added
+- **Per-user usage accounting** — lifetime bytes tracked in `/lib/ppp/ppoemanager-meta`
+  - `total_rx` = client upload bytes (cumulative)
+  - `total_tx` = client download bytes (cumulative)
+- **Live speed columns in Online Users** — `↓ Speed` and `↑ Speed` show KB/s or MB/s for the current session, updated every poll
+- **Session vs. lifetime columns** — Online Users shows `↓ Session` / `↑ Session` (current connection); Users Manager shows `↓ Download` / `↑ Upload` (lifetime totals)
+- **ip-up hook** (`/usr/bin/ppoemanager-ipup`) — records baseline at connect
+- **ip-down hook** (`/usr/bin/ppoemanager-ipdown`) — commits exact session bytes to meta at disconnect, so nothing is lost between 5-minute checker runs
+- **Direction labels** — Rx/Tx replaced with `↓ Download` / `↑ Upload` so numbers match what the client sees
+- **Deterministic overlay** — `get_user_meta` now reads from session file + sysfs only (no ps races, no pid matching, no chap-secrets lookups)
+
+### Fixed
+- Users Manager showed stale values or flapped between stored/live — replaced ps-based overlay with session-file based overlay
+- Session bytes lost between checker runs when a client disconnected — now committed exactly at ip-down
+- Manual `Save & Apply` in Users Manager no longer required for the tab to reflect live bytes
+
 ## [1.1.0-r18] — 2026-10-13
 
 ### Fixed
 - **Light theme visibility** — summary bar in Users Manager used hardcoded dark green background (`#1a3a1a`) with lime/gold text, invisible in Bootstrap light theme. Removed background; swapped colors to `#f57c00` (amber for MRR) and `#0288d1` (teal for Collected) which read correctly in both light and dark themes.
 
-## [1.1.0-r17] — 2026-10-13
+
 
 
 
@@ -123,5 +143,4 @@ Online Users with kernel-sourced peer IP, tab persistence.
 [Unreleased]: https://github.com/arafatrahmanzami/luci-app-pppoe-manager/compare/v1.1.0-r11...HEAD
 [1.1.0-r11]: https://github.com/arafatrahmanzami/luci-app-pppoe-manager/releases/tag/v1.1.0-r11
 [1.1.0-r10]: https://github.com/arafatrahmanzami/luci-app-pppoe-manager/releases/tag/v1.1.0-r10
-[1.1.0-r9]: https://github.com/arafatrahmanzami/luci-app-pppoe-manager/releases/tag/v1.1.0-r9
 [1.1.0-r5]: https://github.com/arafatrahmanzami/luci-app-pppoe-manager/releases/tag/v1.1.0-r5

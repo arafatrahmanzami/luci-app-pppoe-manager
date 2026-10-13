@@ -2,14 +2,60 @@
     "luci-app-pppoe-manager": {
         "description": "PPPoE Server Manager",
         "read": {
-            "ubus": { "luci.ppoemanager": [ "get_users", "get_online", "get_status", "get_user_meta", "get_firewall_status", "get_firewall_preview", "list_firewall_backups", "get_offload_mode" ] },
-            "uci": [ "ppoemanager", "network", "firewall" ],
-            "file": { "/etc/ppp/chap-secrets": [ "read" ], "/lib/ppp/ppp-users": [ "read" ] }
+            "ubus": {
+                "luci.ppoemanager": [
+                    "get_users",
+                    "get_online",
+                    "get_status",
+                    "get_user_meta",
+                    "get_firewall_status",
+                    "get_firewall_preview",
+                    "list_firewall_backups",
+                    "get_offload_mode",
+                    "get_session_usage"
+                ]
+            },
+            "uci": [
+                "ppoemanager",
+                "network",
+                "firewall"
+            ],
+            "file": {
+                "/etc/ppp/chap-secrets": [
+                    "read"
+                ],
+                "/lib/ppp/ppp-users": [
+                    "read"
+                ]
+            }
         },
         "write": {
-            "ubus": { "luci.ppoemanager": [ "add_user", "edit_user", "delete_user", "extend_user", "set_user_meta", "force_offline", "restart_service", "setup_firewall", "restore_firewall", "apply_offloading" ] },
-            "uci": [ "ppoemanager", "firewall" ],
-            "file": { "/etc/ppp/chap-secrets": [ "write" ], "/lib/ppp/ppp-users": [ "write" ] }
+            "ubus": {
+                "luci.ppoemanager": [
+                    "add_user",
+                    "edit_user",
+                    "delete_user",
+                    "extend_user",
+                    "set_user_meta",
+                    "force_offline",
+                    "restart_service",
+                    "setup_firewall",
+                    "restore_firewall",
+                    "apply_offloading"
+                ]
+            },
+            "uci": [
+                "ppoemanager",
+                "firewall"
+            ],
+            "file": {
+                "/etc/ppp/chap-secrets": [
+                    "write"
+                ],
+                "/lib/ppp/ppp-users": [
+                    "write"
+                ]
+            }
         }
     }
 }

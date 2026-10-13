@@ -1,0 +1,66 @@
+#!/bin/sh
+# pppoemanager-ipdown — commit final session bytes to meta at PPP disconnect
+LOG="/tmp/ppoemanager-ipdown.log"
+exec >> "$LOG" 2>&1
+echo "=== $(date) ==="
+echo "ARGS: $*"
+
+IFACE="$1"
+[ -z "$IFACE" ] && { echo "no iface"; exit 0; }
+
+SESSION_FILE="/lib/ppp/ppoemanager-session"
+META_FILE="/lib/ppp/ppoemanager-meta"
+TMP_SESS="/lib/ppp/ppoemanager-session.tmp"
+TMP_META="/lib/ppp/ppoemanager-meta.tmp"
+
+[ ! -f "$SESSION_FILE" ] && { echo "no session file"; exit 0; }
+[ ! -f "$META_FILE" ] && { echo "no meta file"; exit 0; }
+
+ENTRY=$(grep "|$IFACE|" "$SESSION_FILE" | head -1)
+[ -z "$ENTRY" ] && { echo "no entry for $IFACE"; exit 0; }
+
+USER=$(echo "$ENTRY" | cut -d'|' -f4)
+RX_BASE=$(echo "$ENTRY" | cut -d'|' -f5)
+TX_BASE=$(echo "$ENTRY" | cut -d'|' -f6)
+RX_LAST=$(echo "$ENTRY" | cut -d'|' -f7)
+TX_LAST=$(echo "$ENTRY" | cut -d'|' -f8)
+
+[ -z "$USER" ] && { echo "no user"; exit 0; }
+[ -z "$RX_BASE" ] && RX_BASE=0
+[ -z "$TX_BASE" ] && TX_BASE=0
+
+# Try to read sysfs first (interface may still exist)
+RX_FINAL=$(cat /sys/class/net/$IFACE/statistics/rx_bytes 2>/dev/null)
+TX_FINAL=$(cat /sys/class/net/$IFACE/statistics/tx_bytes 2>/dev/null)
+echo "sysfs rx=$RX_FINAL tx=$TX_FINAL"
+
+# If sysfs is gone, fall back to session file's last checker-observed values
+if [ -z "$RX_FINAL" ] || [ -z "$TX_FINAL" ]; then
+    echo "sysfs empty, using fallback rx_last=$RX_LAST tx_last=$TX_LAST"
+    RX_FINAL="$RX_LAST"
+    TX_FINAL="$TX_LAST"
+fi
+
+[ -z "$RX_FINAL" ] && RX_FINAL=0
+[ -z "$TX_FINAL" ] && TX_FINAL=0
+
+DELTA_RX=$((RX_FINAL - RX_BASE))
+DELTA_TX=$((TX_FINAL - TX_BASE))
+[ $DELTA_RX -lt 0 ] && DELTA_RX=0
+[ $DELTA_TX -lt 0 ] && DELTA_TX=0
+echo "user=$USER delta rx=$DELTA_RX tx=$DELTA_TX"
+
+awk -F'|' -v u="$USER" -v drx="$DELTA_RX" -v dtx="$DELTA_TX" -v OFS='|' '
+    {
+        if ($1 == u && NF >= 10) {
+            $9 = ($9 == "" ? 0 : $9) + drx
+            $10 = ($10 == "" ? 0 : $10) + dtx
+        }
+        print
+    }
+' "$META_FILE" > "$TMP_META" && mv "$TMP_META" "$META_FILE"
+echo "meta committed"
+
+grep -v "|$IFACE|" "$SESSION_FILE" > "$TMP_SESS" 2>/dev/null && mv "$TMP_SESS" "$SESSION_FILE"
+echo "session entry removed"
+exit 0

@@ -1,0 +1,14 @@
+#!/bin/sh
+# Ensure pppoe-server-options has both up and down hooks
+OPTS=/etc/ppp/pppoe-server-options
+[ -f "$OPTS" ] || exit 0
+
+if ! grep -q "^ip-up-script" "$OPTS"; then
+    echo "ip-up-script /usr/bin/ppoemanager-ipup" >> "$OPTS"
+fi
+
+if ! grep -q "^ip-down-script" "$OPTS"; then
+    echo "ip-down-script /usr/bin/ppoemanager-ipdown" >> "$OPTS"
+fi
+
+exit 0

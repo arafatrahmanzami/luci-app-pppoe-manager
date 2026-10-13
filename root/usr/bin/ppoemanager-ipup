@@ -1,0 +1,30 @@
+#!/bin/sh
+# pppoemanager-ipup — record session baseline at PPP connect
+# pppd args: $1=iface $2=internal-iface $3=unit $4=local-ip $5=peer-ip
+IFACE="$1"
+PEER="$5"
+[ -z "$IFACE" ] && exit 0
+[ -z "$PEER" ] && exit 0
+
+SESSION_FILE="/lib/ppp/ppoemanager-session"
+touch "$SESSION_FILE"
+
+# Skip if an entry for this iface already exists
+if grep -q "|$IFACE|" "$SESSION_FILE" 2>/dev/null; then
+    exit 0
+fi
+
+# Look up user by peer IP
+USER=$(awk -v ip="$PEER" '$4==ip && $1 !~ /^#/ { print $1; exit }' /etc/ppp/chap-secrets)
+[ -z "$USER" ] && USER="?"
+
+NOW=$(date +%s)
+# Fresh interface: baseline is 0, current reading is whatever sysfs shows (usually 0)
+RX=$(cat /sys/class/net/$IFACE/statistics/rx_bytes 2>/dev/null)
+TX=$(cat /sys/class/net/$IFACE/statistics/tx_bytes 2>/dev/null)
+[ -z "$RX" ] && RX=0
+[ -z "$TX" ] && TX=0
+
+# Format: pid|iface|ip|user|rx_base|tx_base|rx_last|tx_last|epoch
+echo "0|$IFACE|$PEER|$USER|0|0|$RX|$TX|$NOW" >> "$SESSION_FILE"
+exit 0
