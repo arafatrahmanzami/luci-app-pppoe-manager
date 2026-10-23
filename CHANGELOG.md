@@ -18,32 +18,19 @@ Versioning follows [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 
 ## [1.1.0-r21] — 2026-10-23
-### Fixed
-- **RPC Object Not Found Error** — Fixed fatal syntax errors (`new RegExp`, `===`) in `ppoemanager.uc` that caused `rpcd` to reject the file and crash the UI on OpenWrt SNAPSHOT/apk builds.
-- **Stable Build** — Recompiled r20 with the corrected ucode, ensuring full compatibility across IMOU, AP, and Mi Router R3.
-
-## [1.1.0-r20] — 2026-10-23
-### Added
-- **Service Control in UI**: Start, Stop, Restart, Enable, Disable buttons in General Settings.
-- **PPPoE Bridge Setup Wizard**: Automates `br-pppoe` creation, port assignment, and DHCP isolation.
-- **PAP/CHAP Sync**: Users created in the UI are now written to both `chap-secrets` and `pap-secrets`.
-- **ProxyARP Enforcement**: Init script automatically adds `proxyarp` to the options file.
-- **Bridge Fix for swconfig/MT7621**: Replaced `network_get_physdev` with UCI device lookup (fixes Mi Router R3).
-- **Flow Offload Sync**: UI buttons now reflect actual firewall state after clicking.
-
-## [1.1.0-r20] — 2026-10-23
 
 ### Added
-- **Service Control in UI** — Start, Stop, Restart, Enable, Disable buttons in General Settings. No need to visit System → Startup.
-- **PPPoE Bridge Setup Wizard** — Automates creation of `br-pppoe`, assigns ports, creates the `pppoe_server` interface (`proto none`), and optionally isolates DHCP (`ignore '1'`).
+- **Service Control in UI** — Start, Stop, Restart, Enable, and Disable the PPPoE server directly from the General Settings tab.
+- **PPPoE Bridge Setup Wizard** — Automates creation of `br-pppoe`, assigns physical ports, creates the `pppoe_server` interface (`proto none`), and optionally isolates DHCP (`ignore '1'`).
 - **Flow Offload Sync** — The Offload Mode buttons in the Advanced tab now immediately reflect the actual firewall state after clicking (no F5 required).
 - **Auto-add to Firewall** — The bridge wizard automatically adds `br-pppoe` and `ppp+` to the firewall zone with masquerade enabled.
 
 ### Fixed
-- **Mi Router R3 (swconfig/MT7621) Support** — Replaced `network_get_physdev` with a UCI device lookup in the init script. This fixes the silent failure when using a bridge interface on non-DSA devices.
-- **PAP/CHAP Sync** — Adding or deleting a user in the UI now updates both `/etc/ppp/chap-secrets` and `/etc/ppp/pap-secrets`, preventing authentication failures for clients that request PAP.
-- **ProxyARP Enforcement** — The init script now automatically injects `proxyarp` into `/etc/ppp/pppoe-server-options` if it is missing, ensuring clients get proper routing.
-- **UCI State Corruption** — Added `uci commit pppoemanager` to the `uci-defaults` script to prevent `uci export` from failing after installation on certain OpenWrt builds.
+- **Mi Router R3 / swconfig Support** — Replaced `network_get_physdev` with a UCI device lookup in the init script. Fixes silent failure when using a bridge interface on non-DSA (MT7621) devices.
+- **PAP/CHAP Sync** — Adding/deleting a user now updates both `/etc/ppp/chap-secrets` and `/etc/ppp/pap-secrets`.
+- **ProxyARP Enforcement** — Init script automatically injects `proxyarp` into `/etc/ppp/pppoe-server-options`.
+- **UCI State Corruption** — Added `uci commit pppoemanager` to prevent `uci export` from failing after installation.
+- **RPC Object Not Found Error** — Fixed fatal ucode syntax errors (`new RegExp`, `===`) that crashed the UI on OpenWrt SNAPSHOT builds.
 
 ## [1.1.0-r19] — 2026-10-13
 
