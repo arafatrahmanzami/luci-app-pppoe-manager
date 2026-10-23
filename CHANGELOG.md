@@ -26,6 +26,20 @@ Versioning follows [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 - **Bridge Fix for swconfig/MT7621**: Replaced `network_get_physdev` with UCI device lookup (fixes Mi Router R3).
 - **Flow Offload Sync**: UI buttons now reflect actual firewall state after clicking.
 
+## [1.1.0-r20] — 2026-10-23
+
+### Added
+- **Service Control in UI** — Start, Stop, Restart, Enable, Disable buttons in General Settings. No need to visit System → Startup.
+- **PPPoE Bridge Setup Wizard** — Automates creation of `br-pppoe`, assigns ports, creates the `pppoe_server` interface (`proto none`), and optionally isolates DHCP (`ignore '1'`).
+- **Flow Offload Sync** — The Offload Mode buttons in the Advanced tab now immediately reflect the actual firewall state after clicking (no F5 required).
+- **Auto-add to Firewall** — The bridge wizard automatically adds `br-pppoe` and `ppp+` to the firewall zone with masquerade enabled.
+
+### Fixed
+- **Mi Router R3 (swconfig/MT7621) Support** — Replaced `network_get_physdev` with a UCI device lookup in the init script. This fixes the silent failure when using a bridge interface on non-DSA devices.
+- **PAP/CHAP Sync** — Adding or deleting a user in the UI now updates both `/etc/ppp/chap-secrets` and `/etc/ppp/pap-secrets`, preventing authentication failures for clients that request PAP.
+- **ProxyARP Enforcement** — The init script now automatically injects `proxyarp` into `/etc/ppp/pppoe-server-options` if it is missing, ensuring clients get proper routing.
+- **UCI State Corruption** — Added `uci commit pppoemanager` to the `uci-defaults` script to prevent `uci export` from failing after installation on certain OpenWrt builds.
+
 ## [1.1.0-r19] — 2026-10-13
 
 ### Added
