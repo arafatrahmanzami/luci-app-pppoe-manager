@@ -17,6 +17,11 @@ Versioning follows [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 
 
+## [1.1.0-r21] — 2026-10-23
+### Fixed
+- **RPC Object Not Found Error** — Fixed fatal syntax errors (`new RegExp`, `===`) in `ppoemanager.uc` that caused `rpcd` to reject the file and crash the UI on OpenWrt SNAPSHOT/apk builds.
+- **Stable Build** — Recompiled r20 with the corrected ucode, ensuring full compatibility across IMOU, AP, and Mi Router R3.
+
 ## [1.1.0-r20] — 2026-10-23
 ### Added
 - **Service Control in UI**: Start, Stop, Restart, Enable, Disable buttons in General Settings.
