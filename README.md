@@ -205,7 +205,7 @@ chmod +x /etc/init.d/ppoemanager /usr/bin/ppoemanager-checker /usr/bin/ppoemanag
 /etc/init.d/uhttpd restart
 ```
 
-### Method 5 — Upload via LuCI
+### Method 4 — Upload via LuCI
 
 1. Download the `.ipk` or `.apk` from the releases page
 2. Open LuCI → **System → Software**
@@ -213,7 +213,7 @@ chmod +x /etc/init.d/ppoemanager /usr/bin/ppoemanager-checker /usr/bin/ppoemanag
 4. Select the file, click **Install**
 5. Hard-refresh the browser (**Ctrl+Shift+R**)
 
-### Method 6 — Build from source
+### Method 5 — Build from source
 
 See [Compile from Source](#compile-from-source-openwrt-sdk) below.
 
