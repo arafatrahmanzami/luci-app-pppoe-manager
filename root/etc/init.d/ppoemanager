@@ -36,7 +36,7 @@ pppoe_instance() {
     config_get_bool sync "$cfg" sync 0
 
     . /lib/functions/network.sh
-    network_get_physdev device "$interface" || return 1
+    device=$(uci get network.$interface.device 2>/dev/null || echo "$interface")
 
     [ -n "$ac_name" ] && append OPTIONS "-C $ac_name"
     for service_name in $service_names; do
@@ -64,6 +64,11 @@ pppoe_instance() {
 }
 
 start_service() {
+    local opts="/etc/ppp/pppoe-server-options"
+    if [ -f "$opts" ] && ! grep -q "proxyarp" "$opts"; then
+        echo "proxyarp" >> "$opts"
+    fi
+
     config_load pppoemanager
     config_foreach pppoe_instance pppoe_server
 }

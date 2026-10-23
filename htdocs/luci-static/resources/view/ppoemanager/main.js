@@ -9,6 +9,12 @@
 'require tools.widgets as widgets';
 
 var callGetUsers    = rpc.declare({ object: 'luci.ppoemanager', method: 'get_users',  expect: {} });
+var callGetServiceStatus = rpc.declare({ object: 'luci.ppoemanager', method: 'get_service_status', expect: {} });
+var callServiceAction = rpc.declare({ object: 'luci.ppoemanager', method: 'service_action', params: ['action'], expect: {} });
+var callSetupBridge = rpc.declare({ object: 'luci.ppoemanager', method: 'setup_bridge', params: ['ports', 'disable_dhcp'], expect: {} });
+var callGetServiceStatus = rpc.declare({ object: 'luci.ppoemanager', method: 'get_service_status', expect: {} });
+var callServiceAction = rpc.declare({ object: 'luci.ppoemanager', method: 'service_action', params: ['action'], expect: {} });
+var callSetupBridge = rpc.declare({ object: 'luci.ppoemanager', method: 'setup_bridge', params: ['ports', 'disable_dhcp'], expect: {} });
 var callGetUserMeta = rpc.declare({ object: 'luci.ppoemanager', method: 'get_user_meta', expect: {} });
 var callExtendUser  = rpc.declare({ object: 'luci.ppoemanager', method: 'extend_user', params: ['user','days'], expect: {} });
 var callSetUserMeta = rpc.declare({ object: 'luci.ppoemanager', method: 'set_user_meta', params: ['user','price','notes'], expect: {} });
@@ -345,6 +351,41 @@ var SettingsTab = {
         o.datatype = 'uinteger'; o.default = '60';
 
         return m.render().then(function(node) {
+            // SERVICE CONTROL & BRIDGE SETUP
+            var svcBlock = E('div', {'class': 'cbi-section'}, [
+                E('h3', _('Service Control')),
+                E('div', {'style': 'display:flex;gap:10px;margin-bottom:20px'}, [
+                    E('button', {'class': 'btn cbi-button-positive', 'click': function() {
+                        callServiceAction('start').then(function(){ setTimeout(location.reload.bind(location), 1000); });
+                    }}, _('Start')),
+                    E('button', {'class': 'btn cbi-button-negative', 'click': function() {
+                        callServiceAction('stop').then(function(){ setTimeout(location.reload.bind(location), 1000); });
+                    }}, _('Stop')),
+                    E('button', {'class': 'btn cbi-button-action', 'click': function() {
+                        callServiceAction('restart').then(function(){ setTimeout(location.reload.bind(location), 1000); });
+                    }}, _('Restart')),
+                    E('button', {'class': 'btn cbi-button-apply', 'click': function() {
+                        callServiceAction('enable').then(function(){ ui.addNotification(null, _('Service enabled at boot')); });
+                    }}, _('Enable at Boot')),
+                    E('button', {'class': 'btn cbi-button-reset', 'click': function() {
+                        callServiceAction('disable').then(function(){ ui.addNotification(null, _('Service disabled at boot')); });
+                    }}, _('Disable at Boot'))
+                ]),
+                E('h3', _('PPPoE Bridge Setup')),
+                E('p', _('Creates br-pppoe, sets up the interface, and isolates DHCP.')),
+                E('div', {'style': 'display:flex;flex-direction:column;gap:8px;margin-bottom:20px'}, [
+                    E('input', {id: 'bridge_ports', 'class': 'cbi-input-text', placeholder: 'Ports (e.g. lan2 lan3)'}),
+                    E('label', {}, [E('input', {id: 'bridge_dhcp', type: 'checkbox', checked: true}), ' Disable DHCP on this bridge']),
+                    E('button', {'class': 'btn cbi-button-positive important', 'click': function() {
+                        var p = document.getElementById('bridge_ports').value;
+                        var d = document.getElementById('bridge_dhcp').checked ? '1' : '0';
+                        if(!p) return alert('Enter at least one port');
+                        if(confirm('Apply bridge setup?')) callSetupBridge(p, d).then(function(){ location.reload(); });
+                    }}, _('Setup Bridge'))
+                ])
+            ]);
+            node.appendChild(svcBlock);
+
             var fwBlock = E('div', {'class': 'cbi-section'}, [
                 E('h3', _('Firewall Setup')),
                 E('p', _('PPPoE clients cannot reach the internet without a firewall zone and masquerade rule. This is required once.')),
@@ -461,9 +502,10 @@ var AdvancedTab = {
                     'style': 'margin-right:10px',
                     'click': function() {
                         return callSetOffload(value).then(function(r) {
-                            var newMode = (r && r.mode) || value;
-                            ui.addNotification(null, E('p', _('Offload mode set to: ') + newMode));
-                            drawOffload(newMode);
+                            return callGetOffload().then(function(fresh) {
+                                ui.addNotification(null, E('p', _('Offload mode set to: ') + fresh.mode));
+                                drawOffload(fresh.mode);
+                            });
                         });
                     }
                 }, label + (isActive ? ' \u2713' : ''));

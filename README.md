@@ -4,7 +4,7 @@
 
 A modern PPPoE Server Manager for OpenWrt / ImmortalWrt — a lightweight LuCI (OpenWrt's web-based configuration User Interface) application that runs a PPPoE Access Concentrator with an easy-to-use web interface, per-user expiration dates, automatic account blocking, live online session monitoring, one-click firewall setup, and MikroTik-style advanced controls.
 
-**Release:** `1.1.0-r19` — 2026-10-13 — by [@arafatrahmanzami](https://github.com/arafatrahmanzami)
+**Release:** `1.1.0-r20` — 2026-10-13 — by [@arafatrahmanzami](https://github.com/arafatrahmanzami)
 
 Built on top of `rp-pppoe-server` + `ppp` + `nftables`/`iptables` firewall, with a modern LuCI JavaScript UI. Tested on ImmortalWrt 24.10.6 (MediaTek Filogic / IMOU LC-HX3001, aarch64).
 

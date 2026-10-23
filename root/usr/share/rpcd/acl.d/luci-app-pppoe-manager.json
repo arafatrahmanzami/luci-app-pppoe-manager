@@ -12,7 +12,9 @@
                     "get_firewall_preview",
                     "list_firewall_backups",
                     "get_offload_mode",
-                    "get_session_usage"
+                    "get_session_usage",
+                    "get_service_status",
+                    "setup_bridge"
                 ]
             },
             "uci": [
@@ -41,7 +43,8 @@
                     "restart_service",
                     "setup_firewall",
                     "restore_firewall",
-                    "apply_offloading"
+                    "apply_offloading",
+                    "service_action"
                 ]
             },
             "uci": [

@@ -4,6 +4,7 @@ import { open, popen } from 'fs';
 const DB_FILE = '/lib/ppp/ppp-users';
 const META_FILE = '/lib/ppp/ppoemanager-meta';
 const SECRETS_FILE = '/etc/ppp/chap-secrets';
+const PAP_SECRETS_FILE = '/etc/ppp/pap-secrets';
 
 // Strip leading #s from a username (works on both "#user" and "##user")
 function clean_user(u) {
@@ -234,6 +235,55 @@ function get_subnet_base() {
 
 const methods = {
     get_users: { call: function() { return { accounts: read_users() }; } },
+
+    get_service_status: {
+        call: function() {
+            const p = popen("ubus call rc list '{\"name\":\"ppoemanager\"}'");
+            let enabled = false, running = false;
+            if (p) {
+                const out = p.read('all'); p.close();
+                if (match(out, /"enabled":\s*true/)) enabled = true;
+                if (match(out, /"running":\s*true/)) running = true;
+            }
+            return { enabled: enabled, running: running };
+        }
+    },
+    service_action: {
+        args: { action: 'action' },
+        call: function(req) {
+            const act = trim(req.args.action);
+            const allowed = ['enable','disable','start','stop','restart','reload'];
+            if (!length(act) || !match(act, new RegExp("^(" + join("|", allowed) + ")$"))) return { result: false };
+            system(`ubus call rc init '{"name":"ppoemanager","action":"${act}"}'`);
+            return { result: true };
+        }
+    },
+    setup_bridge: {
+        args: { ports: 'ports', disable_dhcp: 'disable_dhcp' },
+        call: function(req) {
+            const ports = trim(req.args.ports || '');
+            const disable_dhcp = trim(req.args.disable_dhcp || '1') === '1';
+            system("uci set network.br_pppoe=device");
+            system("uci set network.br_pppoe.name='br-pppoe'");
+            system("uci set network.br_pppoe.type='bridge'");
+            system("uci set network.br_pppoe.ports='" + ports + "'");
+            system("uci set network.br_pppoe.stp='0'");
+            system("uci set network.pppoe_server=interface");
+            system("uci set network.pppoe_server.proto='none'");
+            system("uci set network.pppoe_server.device='br-pppoe'");
+            system("uci set dhcp.pppoe=dhcp");
+            system("uci set dhcp.pppoe.interface='pppoe_server'");
+            if (disable_dhcp) system("uci set dhcp.pppoe.ignore='1'");
+            else system("uci delete dhcp.pppoe.ignore");
+            system("uci add_list firewall.@zone[-1].device='br-pppoe'");
+            system("uci add_list firewall.@zone[-1].device='ppp+'");
+            system("uci set firewall.@zone[-1].masq='1'");
+            system("uci set firewall.@zone[-1].forward='ACCEPT'");
+            system("uci commit network; uci commit dhcp; uci commit firewall");
+            system("/etc/init.d/network reload; /etc/init.d/dnsmasq restart; /etc/init.d/firewall reload");
+            return { result: true };
+        }
+    },
     get_user_meta: {
         call: function() {
             const meta = read_meta();
@@ -550,9 +600,11 @@ const methods = {
             }
 
             purge_user(userClean);
+            system(`sed -i '/^#\?${userClean}\>/d' ${PAP_SECRETS_FILE} 2>/dev/null`);
 
             system(`echo '${expiry}|${userClean}|${passwd}|${ip}|${id}' >> ${DB_FILE}`);
             system(`echo '${userClean} * ${passwd} ${ip}' >> ${SECRETS_FILE}`);
+            system(`echo '${userClean} * ${passwd} ${ip}' >> ${PAP_SECRETS_FILE}`);
 
             // Initialize meta with first_seen
             const meta = read_meta();
@@ -578,6 +630,7 @@ const methods = {
 
             purge_user(olduserClean);
             if (userClean != olduserClean) purge_user(userClean);
+            system(`sed -i '/^#\?${userClean}\>/d' ${PAP_SECRETS_FILE} 2>/dev/null`);
 
             const p = split(ipaddr, '.', 4);
             const id = length(p) == 4 ? p[3] : '0';
@@ -593,6 +646,7 @@ const methods = {
             const userClean = clean_user(trim(req.args.user));
             if (!length(userClean)) return { result: false };
             purge_user(userClean);
+            system(`sed -i '/^#\?${userClean}\>/d' ${PAP_SECRETS_FILE} 2>/dev/null`);
             // Remove meta entry
             const meta = read_meta();
             if (meta[userClean]) {

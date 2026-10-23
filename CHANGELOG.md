@@ -17,6 +17,15 @@ Versioning follows [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 
 
+## [1.1.0-r20] — 2026-10-23
+### Added
+- **Service Control in UI**: Start, Stop, Restart, Enable, Disable buttons in General Settings.
+- **PPPoE Bridge Setup Wizard**: Automates `br-pppoe` creation, port assignment, and DHCP isolation.
+- **PAP/CHAP Sync**: Users created in the UI are now written to both `chap-secrets` and `pap-secrets`.
+- **ProxyARP Enforcement**: Init script automatically adds `proxyarp` to the options file.
+- **Bridge Fix for swconfig/MT7621**: Replaced `network_get_physdev` with UCI device lookup (fixes Mi Router R3).
+- **Flow Offload Sync**: UI buttons now reflect actual firewall state after clicking.
+
 ## [1.1.0-r19] — 2026-10-13
 
 ### Added
