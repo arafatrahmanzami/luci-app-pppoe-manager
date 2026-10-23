@@ -205,17 +205,6 @@ chmod +x /etc/init.d/ppoemanager /usr/bin/ppoemanager-checker /usr/bin/ppoemanag
 /etc/init.d/uhttpd restart
 ```
 
-### Method 4 — Rootfs tarball (for IMOU LC-HX3001)
-
-Pre-built rootfs with the app installed:
-
-```sh
-cd /tmp
-wget https://github.com/arafatrahmanzami/luci-app-pppoe-manager/releases/download/v1.1.0-r19/luci-app-pppoe-manager-rootfs-r19.tar.gz
-```
-
-This is a complete root filesystem — for advanced users or image builders only.
-
 ### Method 5 — Upload via LuCI
 
 1. Download the `.ipk` or `.apk` from the releases page
