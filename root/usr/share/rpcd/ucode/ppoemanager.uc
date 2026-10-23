@@ -253,7 +253,11 @@ const methods = {
         call: function(req) {
             const act = trim(req.args.action);
             const allowed = ['enable','disable','start','stop','restart','reload'];
-            if (!length(act) || !match(act, new RegExp("^(" + join("|", allowed) + ")$"))) return { result: false };
+            let valid = false;
+            for (let a in allowed) {
+                if (allowed[a] == act) valid = true;
+            }
+            if (!valid) return { result: false };
             system("ubus call rc init '{\"name\":\"ppoemanager\",\"action\":\"" + act + "\"}'");
             return { result: true };
         }
@@ -262,7 +266,7 @@ const methods = {
         args: { ports: 'ports', disable_dhcp: 'disable_dhcp' },
         call: function(req) {
             const ports = trim(req.args.ports || '');
-            const disable_dhcp = trim(req.args.disable_dhcp || '1') === '1';
+            const disable_dhcp = trim(req.args.disable_dhcp || '1') == '1';
             system("uci set network.br_pppoe=device");
             system("uci set network.br_pppoe.name='br-pppoe'");
             system("uci set network.br_pppoe.type='bridge'");
