@@ -254,7 +254,7 @@ const methods = {
             const act = trim(req.args.action);
             const allowed = ['enable','disable','start','stop','restart','reload'];
             if (!length(act) || !match(act, new RegExp("^(" + join("|", allowed) + ")$"))) return { result: false };
-            system(`ubus call rc init '{"name":"ppoemanager","action":"${act}"}'`);
+            system("ubus call rc init '{\"name\":\"ppoemanager\",\"action\":\"" + act + "\"}'");
             return { result: true };
         }
     },
@@ -274,7 +274,7 @@ const methods = {
             system("uci set dhcp.pppoe=dhcp");
             system("uci set dhcp.pppoe.interface='pppoe_server'");
             if (disable_dhcp) system("uci set dhcp.pppoe.ignore='1'");
-            else system("uci delete dhcp.pppoe.ignore");
+            else system("uci set dhcp.pppoe.ignore='0'");
             system("uci add_list firewall.@zone[-1].device='br-pppoe'");
             system("uci add_list firewall.@zone[-1].device='ppp+'");
             system("uci set firewall.@zone[-1].masq='1'");

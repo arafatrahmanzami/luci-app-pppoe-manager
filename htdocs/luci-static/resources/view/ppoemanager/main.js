@@ -12,9 +12,6 @@ var callGetUsers    = rpc.declare({ object: 'luci.ppoemanager', method: 'get_use
 var callGetServiceStatus = rpc.declare({ object: 'luci.ppoemanager', method: 'get_service_status', expect: {} });
 var callServiceAction = rpc.declare({ object: 'luci.ppoemanager', method: 'service_action', params: ['action'], expect: {} });
 var callSetupBridge = rpc.declare({ object: 'luci.ppoemanager', method: 'setup_bridge', params: ['ports', 'disable_dhcp'], expect: {} });
-var callGetServiceStatus = rpc.declare({ object: 'luci.ppoemanager', method: 'get_service_status', expect: {} });
-var callServiceAction = rpc.declare({ object: 'luci.ppoemanager', method: 'service_action', params: ['action'], expect: {} });
-var callSetupBridge = rpc.declare({ object: 'luci.ppoemanager', method: 'setup_bridge', params: ['ports', 'disable_dhcp'], expect: {} });
 var callGetUserMeta = rpc.declare({ object: 'luci.ppoemanager', method: 'get_user_meta', expect: {} });
 var callExtendUser  = rpc.declare({ object: 'luci.ppoemanager', method: 'extend_user', params: ['user','days'], expect: {} });
 var callSetUserMeta = rpc.declare({ object: 'luci.ppoemanager', method: 'set_user_meta', params: ['user','price','notes'], expect: {} });
@@ -351,7 +348,6 @@ var SettingsTab = {
         o.datatype = 'uinteger'; o.default = '60';
 
         return m.render().then(function(node) {
-            // SERVICE CONTROL & BRIDGE SETUP
             var svcBlock = E('div', {'class': 'cbi-section'}, [
                 E('h3', _('Service Control')),
                 E('div', {'style': 'display:flex;gap:10px;margin-bottom:20px'}, [
@@ -372,15 +368,15 @@ var SettingsTab = {
                     }}, _('Disable at Boot'))
                 ]),
                 E('h3', _('PPPoE Bridge Setup')),
-                E('p', _('Creates br-pppoe, sets up the interface, and isolates DHCP.')),
+                E('p', _('Creates br-pppoe, sets up the interface, and configures DHCP.')),
                 E('div', {'style': 'display:flex;flex-direction:column;gap:8px;margin-bottom:20px'}, [
                     E('input', {id: 'bridge_ports', 'class': 'cbi-input-text', placeholder: 'Ports (e.g. lan2 lan3)'}),
-                    E('label', {}, [E('input', {id: 'bridge_dhcp', type: 'checkbox', checked: true}), ' Disable DHCP on this bridge']),
+                    E('label', {}, [E('input', {id: 'bridge_dhcp', type: 'checkbox', checked: true}), ' Disable DHCP on this bridge (for isolated PPPoE)']),
                     E('button', {'class': 'btn cbi-button-positive important', 'click': function() {
                         var p = document.getElementById('bridge_ports').value;
                         var d = document.getElementById('bridge_dhcp').checked ? '1' : '0';
                         if(!p) return alert('Enter at least one port');
-                        if(confirm('Apply bridge setup?')) callSetupBridge(p, d).then(function(){ location.reload(); });
+                        if(confirm('Apply bridge setup? This will create br-pppoe and assign ports.')) callSetupBridge(p, d).then(function(){ location.reload(); });
                     }}, _('Setup Bridge'))
                 ])
             ]);
