@@ -165,7 +165,7 @@ function read_online() {
 
         const uname = info.peer ? username_by_ip(info.peer) : '?';
         const meta = read_meta();
-        const m = meta[uname] || { dl_rate: '', ul_rate: '' };
+        const user_meta = meta[uname] || { dl_rate: '', ul_rate: '' };
         push(sessions, {
             pid,
             mac,
@@ -174,8 +174,8 @@ function read_online() {
             gateway: info.gw,
             username: uname,
             duration,
-            dl_rate: m.dl_rate,
-            ul_rate: m.ul_rate
+            dl_rate: user_meta.dl_rate,
+            ul_rate: user_meta.ul_rate
         });
     }
     psOut.close();
