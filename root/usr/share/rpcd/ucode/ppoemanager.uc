@@ -442,7 +442,6 @@ const methods = {
             }
             write_meta(meta);
 
-            system('/etc/init.d/ppoemanager restart >/dev/null 2>&1 &');
             return { result: true, days: days, user: user, paid: m.total_paid };
         }
     },
@@ -628,7 +627,6 @@ const methods = {
             m.first_seen = `${time()}`;
             write_meta(meta);
 
-            system('/etc/init.d/ppoemanager restart >/dev/null 2>&1 &');
             return { result: true, ip: ip, id: id };
         }
     },
@@ -653,7 +651,6 @@ const methods = {
             system(`echo '${expiry}|${userClean}|${passwd}|${ipaddr}|${id}' >> ${DB_FILE}`);
             system(`echo '${userClean} * ${passwd} ${ipaddr}' >> ${SECRETS_FILE}`);
             system(`echo '${userClean} * ${passwd} ${ipaddr}' >> ${PAP_SECRETS_FILE}`);
-            system('/etc/init.d/ppoemanager restart >/dev/null 2>&1 &');
             return { result: true };
         }
     },
@@ -670,7 +667,6 @@ const methods = {
                 delete meta[userClean];
                 write_meta(meta);
             }
-            system('/etc/init.d/ppoemanager restart >/dev/null 2>&1 &');
             return { result: true };
         }
     },
