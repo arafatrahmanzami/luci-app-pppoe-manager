@@ -20,7 +20,7 @@ function read_meta() {
     const f = open(META_FILE, 'r');
     if (!f) return meta;
     for (let line = f.read('line'); length(line); line = f.read('line')) {
-        const parts = split(trim(line), '|', 10);
+        const parts = split(trim(line), '|', 12);
         if (length(parts) >= 1 && length(parts[0])) {
             meta[parts[0]] = {
                 user: parts[0],
@@ -32,7 +32,9 @@ function read_meta() {
                 total_seconds: parts[6] || '0',
                 total_paid: parts[7] || '0',
                 total_rx: parts[8] || '0',
-                total_tx: parts[9] || '0'
+                total_tx: parts[9] || '0',
+                dl_rate: parts[10] || '',
+                ul_rate: parts[11] || ''
             };
         }
     }
@@ -60,7 +62,7 @@ function ensure_meta(user, meta) {
         meta[user] = {
             user: user, price: '', notes: '',
             first_seen: `${time()}`, last_seen: '',
-            sessions: '0', total_seconds: '0', total_paid: '0', total_rx: '0', total_tx: '0'
+            sessions: '0', total_seconds: '0', total_paid: '0', total_rx: '0', total_tx: '0', dl_rate: '', ul_rate: ''
         };
     }
     return meta[user];
@@ -324,11 +326,13 @@ const methods = {
     },
 
     set_user_meta: {
-        args: { user: 'user', price: 'price', notes: 'notes' },
+        args: { user: 'user', price: 'price', notes: 'notes', dl_rate: 'dl_rate', ul_rate: 'ul_rate' },
         call: function(req) {
             const user = clean_user(trim(req.args.user));
             const price = trim(req.args.price || '');
             const notes = trim(req.args.notes || '');
+            const dl_rate = trim(req.args.dl_rate || '');
+            const ul_rate = trim(req.args.ul_rate || '');
             if (!length(user)) return { result: false, error: 'missing_user' };
 
             const meta = read_meta();
@@ -336,6 +340,8 @@ const methods = {
             const oldPrice = m.price;
             m.price = price;
             m.notes = notes;
+            m.dl_rate = dl_rate;
+            m.ul_rate = ul_rate;
             if (!length(m.first_seen)) m.first_seen = `${time()}`;
 
             if (length(price) && price != oldPrice) {

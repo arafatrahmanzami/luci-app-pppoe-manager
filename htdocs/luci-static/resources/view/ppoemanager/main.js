@@ -14,7 +14,7 @@ var callServiceAction = rpc.declare({ object: 'luci.ppoemanager', method: 'servi
 var callSetupBridge = rpc.declare({ object: 'luci.ppoemanager', method: 'setup_bridge', params: ['ports', 'disable_dhcp'], expect: {} });
 var callGetUserMeta = rpc.declare({ object: 'luci.ppoemanager', method: 'get_user_meta', expect: {} });
 var callExtendUser  = rpc.declare({ object: 'luci.ppoemanager', method: 'extend_user', params: ['user','days'], expect: {} });
-var callSetUserMeta = rpc.declare({ object: 'luci.ppoemanager', method: 'set_user_meta', params: ['user','price','notes'], expect: {} });
+var callSetUserMeta = rpc.declare({ object: 'luci.ppoemanager', method: 'set_user_meta', params: ['user','price','notes','dl_rate','ul_rate'], expect: {} });
 var callGetOnline   = rpc.declare({ object: 'luci.ppoemanager', method: 'get_online', expect: {} });
 var callAddUser     = rpc.declare({ object: 'luci.ppoemanager', method: 'add_user',   params: ['user','passwd','ipaddr','expiry'], expect: {} });
 var callEditUser    = rpc.declare({ object: 'luci.ppoemanager', method: 'edit_user',  params: ['olduser','user','passwd','ipaddr','expiry'], expect: {} });
@@ -134,6 +134,8 @@ var UsersTab = {
                 E('th',{'class':'th'},_('Added')),
                 E('th',{'class':'th'},_('\u2193 Download')),
                 E('th',{'class':'th'},_('\u2191 Upload')),
+                E('th',{'class':'th'},_('↓ Lim')),
+                E('th',{'class':'th'},_('↑ Lim')),
                 E('th',{'class':'th'},_('Status')),
                 E('th',{'class':'th'},_('Actions'))
             ])
@@ -210,7 +212,9 @@ var UsersTab = {
                 E('label',{},[_('Static IP: '),E('input',{id:'ei','class':'cbi-input-text',value:ip,style:'width:250px'})]),
                 E('label',{},[_('Expiration: '),E('input',{id:'ee',type:'date','class':'cbi-input-text',value:d,style:'width:250px'})]),
                 E('label',{},[_('Price: '),E('input',{id:'eprice','class':'cbi-input-text',value:meta.price||'',style:'width:250px'})]),
-                E('label',{},[_('Notes: '),E('input',{id:'enotes','class':'cbi-input-text',value:meta.notes||'',style:'width:250px'})])
+                E('label',{},[_('Notes: '),E('input',{id:'enotes','class':'cbi-input-text',value:meta.notes||'',style:'width:250px'})]),
+                E('label',{},[_('Download Limit (kbps): '),E('input',{id:'edlrate','class':'cbi-input-text',value:meta.dl_rate||'',style:'width:250px'})]),
+                E('label',{},[_('Upload Limit (kbps): '),E('input',{id:'eulrate','class':'cbi-input-text',value:meta.ul_rate||'',style:'width:250px'})])
             ]),
             E('div',{'class':'right'},[
                 E('button',{'class':'btn','click':ui.hideModal},_('Cancel')),' ',
@@ -221,10 +225,12 @@ var UsersTab = {
                     var e=document.getElementById('ee').value;
                     var pr=document.getElementById('eprice').value.trim();
                     var nt=document.getElementById('enotes').value.trim();
+                    var dl=document.getElementById('edlrate').value.trim();
+                    var ul=document.getElementById('eulrate').value.trim();
                     if(!n||!p||!e){alert('All fields required');return;}
                     var ets=Math.floor(new Date(e).getTime()/1000);
                     callEditUser(user,n,p,i,ets.toString()).then(function(){
-                        callSetUserMeta(n, pr, nt).then(function(){ location.reload(); });
+                        callSetUserMeta(n, pr, nt, dl, ul).then(function(){ location.reload(); });
                     });
                 }},_('Save'))
             ])
