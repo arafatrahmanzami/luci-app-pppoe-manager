@@ -17,6 +17,15 @@ Versioning follows [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 
 
+## [1.1.0-r22] — 2026-10-24
+### Added
+- Per-User Rate Limiting (Bandwidth Shaping) via tc HTB
+- Live limits display in Users Manager and Online Users
+### Fixed
+- Object not found RPC error caused by duplicate ucode variables
+- Missing tc kernel dependencies in Makefile
+- Hardened ip-up hook to create ifb0 dynamically
+
 ## [1.1.0-r21] — 2026-10-23
 
 ### Added
