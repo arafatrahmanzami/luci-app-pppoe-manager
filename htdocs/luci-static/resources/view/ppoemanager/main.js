@@ -134,8 +134,6 @@ var UsersTab = {
                 E('th',{'class':'th'},_('Added')),
                 E('th',{'class':'th'},_('\u2193 Download')),
                 E('th',{'class':'th'},_('\u2191 Upload')),
-                E('th',{'class':'th'},_('↓ Lim')),
-                E('th',{'class':'th'},_('↑ Lim')),
                 E('th',{'class':'th'},_('Status')),
                 E('th',{'class':'th'},_('Actions'))
             ])
@@ -273,6 +271,8 @@ var OnlineTab = {
         var rows = sess.map(function(s,i){
             return [
                 i+1, s.username||'?', s.cip||'-', s.mac||'-', s.gateway||'-', fmtDuration(s.duration),
+                s.dl_rate ? s.dl_rate + 'k' : '-',
+                s.ul_rate ? s.ul_rate + 'k' : '-',
                 fmtRate(s._rate_tx), fmtRate(s._rate_rx),
                 fmtBytes(s.tx||0), fmtBytes(s.rx||0),
                 E('button',{'class':'btn cbi-button-negative important','click':function(){
@@ -289,6 +289,8 @@ var OnlineTab = {
                 E('th',{'class':'th'},_('MAC')),
                 E('th',{'class':'th'},_('Server IP')),
                 E('th',{'class':'th'},_('Duration')),
+                E('th',{'class':'th'},_('↓ Lim')),
+                E('th',{'class':'th'},_('↑ Lim')),
                 E('th',{'class':'th'},_('\u2193 Speed')),
                 E('th',{'class':'th'},_('\u2191 Speed')),
                 E('th',{'class':'th'},_('\u2193 Session')),

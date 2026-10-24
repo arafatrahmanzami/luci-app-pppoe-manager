@@ -6,28 +6,25 @@ PEER="$5"
 [ -z "$IFACE" ] && 
 # Apply Rate Limiting via tc (HTB)
 META_FILE="/lib/ppp/ppoemanager-meta"
-if [ -f "$META_FILE" ]; then
+if [ -f "$META_FILE" ] && command -v tc >/dev/null 2>&1; then
     RATES=$(awk -F'|' -v u="$USER" '$1 == u { print $11"|"$12 }' "$META_FILE")
     DL=$(echo "$RATES" | cut -d'|' -f1)
     UL=$(echo "$RATES" | cut -d'|' -f2)
 
     if [ -n "$DL" ] || [ -n "$UL" ]; then
-        # Shape Download (Egress on ppp interface)
         if [ -n "$DL" ]; then
-            tc qdisc add dev "$IFACE" root handle 1: htb default 10 2>/dev/null
-            tc class add dev "$IFACE" parent 1: classid 1:1 htb rate 1000mbit 2>/dev/null
-            tc class add dev "$IFACE" parent 1:1 classid 1:10 htb rate "${DL}kbit" ceil "${DL}kbit" 2>/dev/null
+            tc qdisc replace dev "$IFACE" root handle 1: htb default 10 2>/dev/null
+            tc class replace dev "$IFACE" parent 1: classid 1:1 htb rate 1000mbit 2>/dev/null
+            tc class replace dev "$IFACE" parent 1:1 classid 1:10 htb rate "${DL}kbit" ceil "${DL}kbit" 2>/dev/null
         fi
-
-        # Shape Upload (Ingress on ppp interface redirected to ifb0)
         if [ -n "$UL" ]; then
             modprobe ifb 2>/dev/null
             ip link set dev ifb0 up 2>/dev/null
-            tc qdisc add dev "$IFACE" handle ffff: ingress 2>/dev/null
-            tc filter add dev "$IFACE" parent ffff: protocol ip u32 match u32 0 0 action mirred egress redirect dev ifb0 2>/dev/null
-            tc qdisc add dev ifb0 root handle 1: htb default 10 2>/dev/null
-            tc class add dev ifb0 parent 1: classid 1:1 htb rate 1000mbit 2>/dev/null
-            tc class add dev ifb0 parent 1:1 classid 1:10 htb rate "${UL}kbit" ceil "${UL}kbit" 2>/dev/null
+            tc qdisc replace dev "$IFACE" handle ffff: ingress 2>/dev/null
+            tc filter replace dev "$IFACE" parent ffff: protocol ip u32 match u32 0 0 action mirred egress redirect dev ifb0 2>/dev/null
+            tc qdisc replace dev ifb0 root handle 1: htb default 10 2>/dev/null
+            tc class replace dev ifb0 parent 1: classid 1:1 htb rate 1000mbit 2>/dev/null
+            tc class replace dev ifb0 parent 1: classid 1:10 htb rate "${UL}kbit" ceil "${UL}kbit" 2>/dev/null
         fi
     fi
 fi
@@ -36,28 +33,25 @@ exit 0
 [ -z "$PEER" ] && 
 # Apply Rate Limiting via tc (HTB)
 META_FILE="/lib/ppp/ppoemanager-meta"
-if [ -f "$META_FILE" ]; then
+if [ -f "$META_FILE" ] && command -v tc >/dev/null 2>&1; then
     RATES=$(awk -F'|' -v u="$USER" '$1 == u { print $11"|"$12 }' "$META_FILE")
     DL=$(echo "$RATES" | cut -d'|' -f1)
     UL=$(echo "$RATES" | cut -d'|' -f2)
 
     if [ -n "$DL" ] || [ -n "$UL" ]; then
-        # Shape Download (Egress on ppp interface)
         if [ -n "$DL" ]; then
-            tc qdisc add dev "$IFACE" root handle 1: htb default 10 2>/dev/null
-            tc class add dev "$IFACE" parent 1: classid 1:1 htb rate 1000mbit 2>/dev/null
-            tc class add dev "$IFACE" parent 1:1 classid 1:10 htb rate "${DL}kbit" ceil "${DL}kbit" 2>/dev/null
+            tc qdisc replace dev "$IFACE" root handle 1: htb default 10 2>/dev/null
+            tc class replace dev "$IFACE" parent 1: classid 1:1 htb rate 1000mbit 2>/dev/null
+            tc class replace dev "$IFACE" parent 1:1 classid 1:10 htb rate "${DL}kbit" ceil "${DL}kbit" 2>/dev/null
         fi
-
-        # Shape Upload (Ingress on ppp interface redirected to ifb0)
         if [ -n "$UL" ]; then
             modprobe ifb 2>/dev/null
             ip link set dev ifb0 up 2>/dev/null
-            tc qdisc add dev "$IFACE" handle ffff: ingress 2>/dev/null
-            tc filter add dev "$IFACE" parent ffff: protocol ip u32 match u32 0 0 action mirred egress redirect dev ifb0 2>/dev/null
-            tc qdisc add dev ifb0 root handle 1: htb default 10 2>/dev/null
-            tc class add dev ifb0 parent 1: classid 1:1 htb rate 1000mbit 2>/dev/null
-            tc class add dev ifb0 parent 1:1 classid 1:10 htb rate "${UL}kbit" ceil "${UL}kbit" 2>/dev/null
+            tc qdisc replace dev "$IFACE" handle ffff: ingress 2>/dev/null
+            tc filter replace dev "$IFACE" parent ffff: protocol ip u32 match u32 0 0 action mirred egress redirect dev ifb0 2>/dev/null
+            tc qdisc replace dev ifb0 root handle 1: htb default 10 2>/dev/null
+            tc class replace dev ifb0 parent 1: classid 1:1 htb rate 1000mbit 2>/dev/null
+            tc class replace dev ifb0 parent 1: classid 1:10 htb rate "${UL}kbit" ceil "${UL}kbit" 2>/dev/null
         fi
     fi
 fi
@@ -72,28 +66,25 @@ if grep -q "|$IFACE|" "$SESSION_FILE" 2>/dev/null; then
     
 # Apply Rate Limiting via tc (HTB)
 META_FILE="/lib/ppp/ppoemanager-meta"
-if [ -f "$META_FILE" ]; then
+if [ -f "$META_FILE" ] && command -v tc >/dev/null 2>&1; then
     RATES=$(awk -F'|' -v u="$USER" '$1 == u { print $11"|"$12 }' "$META_FILE")
     DL=$(echo "$RATES" | cut -d'|' -f1)
     UL=$(echo "$RATES" | cut -d'|' -f2)
 
     if [ -n "$DL" ] || [ -n "$UL" ]; then
-        # Shape Download (Egress on ppp interface)
         if [ -n "$DL" ]; then
-            tc qdisc add dev "$IFACE" root handle 1: htb default 10 2>/dev/null
-            tc class add dev "$IFACE" parent 1: classid 1:1 htb rate 1000mbit 2>/dev/null
-            tc class add dev "$IFACE" parent 1:1 classid 1:10 htb rate "${DL}kbit" ceil "${DL}kbit" 2>/dev/null
+            tc qdisc replace dev "$IFACE" root handle 1: htb default 10 2>/dev/null
+            tc class replace dev "$IFACE" parent 1: classid 1:1 htb rate 1000mbit 2>/dev/null
+            tc class replace dev "$IFACE" parent 1:1 classid 1:10 htb rate "${DL}kbit" ceil "${DL}kbit" 2>/dev/null
         fi
-
-        # Shape Upload (Ingress on ppp interface redirected to ifb0)
         if [ -n "$UL" ]; then
             modprobe ifb 2>/dev/null
             ip link set dev ifb0 up 2>/dev/null
-            tc qdisc add dev "$IFACE" handle ffff: ingress 2>/dev/null
-            tc filter add dev "$IFACE" parent ffff: protocol ip u32 match u32 0 0 action mirred egress redirect dev ifb0 2>/dev/null
-            tc qdisc add dev ifb0 root handle 1: htb default 10 2>/dev/null
-            tc class add dev ifb0 parent 1: classid 1:1 htb rate 1000mbit 2>/dev/null
-            tc class add dev ifb0 parent 1:1 classid 1:10 htb rate "${UL}kbit" ceil "${UL}kbit" 2>/dev/null
+            tc qdisc replace dev "$IFACE" handle ffff: ingress 2>/dev/null
+            tc filter replace dev "$IFACE" parent ffff: protocol ip u32 match u32 0 0 action mirred egress redirect dev ifb0 2>/dev/null
+            tc qdisc replace dev ifb0 root handle 1: htb default 10 2>/dev/null
+            tc class replace dev ifb0 parent 1: classid 1:1 htb rate 1000mbit 2>/dev/null
+            tc class replace dev ifb0 parent 1: classid 1:10 htb rate "${UL}kbit" ceil "${UL}kbit" 2>/dev/null
         fi
     fi
 fi
@@ -117,28 +108,25 @@ echo "0|$IFACE|$PEER|$USER|0|0|$RX|$TX|$NOW" >> "$SESSION_FILE"
 
 # Apply Rate Limiting via tc (HTB)
 META_FILE="/lib/ppp/ppoemanager-meta"
-if [ -f "$META_FILE" ]; then
+if [ -f "$META_FILE" ] && command -v tc >/dev/null 2>&1; then
     RATES=$(awk -F'|' -v u="$USER" '$1 == u { print $11"|"$12 }' "$META_FILE")
     DL=$(echo "$RATES" | cut -d'|' -f1)
     UL=$(echo "$RATES" | cut -d'|' -f2)
 
     if [ -n "$DL" ] || [ -n "$UL" ]; then
-        # Shape Download (Egress on ppp interface)
         if [ -n "$DL" ]; then
-            tc qdisc add dev "$IFACE" root handle 1: htb default 10 2>/dev/null
-            tc class add dev "$IFACE" parent 1: classid 1:1 htb rate 1000mbit 2>/dev/null
-            tc class add dev "$IFACE" parent 1:1 classid 1:10 htb rate "${DL}kbit" ceil "${DL}kbit" 2>/dev/null
+            tc qdisc replace dev "$IFACE" root handle 1: htb default 10 2>/dev/null
+            tc class replace dev "$IFACE" parent 1: classid 1:1 htb rate 1000mbit 2>/dev/null
+            tc class replace dev "$IFACE" parent 1:1 classid 1:10 htb rate "${DL}kbit" ceil "${DL}kbit" 2>/dev/null
         fi
-
-        # Shape Upload (Ingress on ppp interface redirected to ifb0)
         if [ -n "$UL" ]; then
             modprobe ifb 2>/dev/null
             ip link set dev ifb0 up 2>/dev/null
-            tc qdisc add dev "$IFACE" handle ffff: ingress 2>/dev/null
-            tc filter add dev "$IFACE" parent ffff: protocol ip u32 match u32 0 0 action mirred egress redirect dev ifb0 2>/dev/null
-            tc qdisc add dev ifb0 root handle 1: htb default 10 2>/dev/null
-            tc class add dev ifb0 parent 1: classid 1:1 htb rate 1000mbit 2>/dev/null
-            tc class add dev ifb0 parent 1:1 classid 1:10 htb rate "${UL}kbit" ceil "${UL}kbit" 2>/dev/null
+            tc qdisc replace dev "$IFACE" handle ffff: ingress 2>/dev/null
+            tc filter replace dev "$IFACE" parent ffff: protocol ip u32 match u32 0 0 action mirred egress redirect dev ifb0 2>/dev/null
+            tc qdisc replace dev ifb0 root handle 1: htb default 10 2>/dev/null
+            tc class replace dev ifb0 parent 1: classid 1:1 htb rate 1000mbit 2>/dev/null
+            tc class replace dev ifb0 parent 1: classid 1:10 htb rate "${UL}kbit" ceil "${UL}kbit" 2>/dev/null
         fi
     fi
 fi

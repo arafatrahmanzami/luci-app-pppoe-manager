@@ -62,7 +62,8 @@ function ensure_meta(user, meta) {
         meta[user] = {
             user: user, price: '', notes: '',
             first_seen: `${time()}`, last_seen: '',
-            sessions: '0', total_seconds: '0', total_paid: '0', total_rx: '0', total_tx: '0', dl_rate: '', ul_rate: ''
+            sessions: '0', total_seconds: '0', total_paid: '0', total_rx: '0', total_tx: '0',
+            dl_rate: '', ul_rate: ''
         };
     }
     return meta[user];
@@ -162,14 +163,19 @@ function read_online() {
             }
         }
 
+        const uname = info.peer ? username_by_ip(info.peer) : '?';
+        const meta = read_meta();
+        const m = meta[uname] || { dl_rate: '', ul_rate: '' };
         push(sessions, {
             pid,
             mac,
             iface,
             cip: info.peer,
             gateway: info.gw,
-            username: info.peer ? username_by_ip(info.peer) : '?',
-            duration
+            username: uname,
+            duration,
+            dl_rate: m.dl_rate,
+            ul_rate: m.ul_rate
         });
     }
     psOut.close();
