@@ -85,6 +85,12 @@ Existing OpenWrt PPPoE server tools fall into two categories:
 - Modern JavaScript UI with tab persistence (`localStorage`)
 - Config validation — warns on subnet conflicts
 - Universal architecture (`PKG_ARCH=all`) — runs on every OpenWrt CPU
+- ✅ Service Control — Start, Stop, Restart, Enable, and Disable the PPPoE server directly from the UI.
+- ✅ PPPoE Bridge Wizard — Automates the creation of br-pppoe, assigns physical ports, and configures DHCP isolation.
+
+
+
+
 
 **User Management**
 - Add, edit, delete PPPoE accounts from the web UI
@@ -92,12 +98,17 @@ Existing OpenWrt PPPoE server tools fall into two categories:
 - Optional static IP binding or auto-assign from pool
 - Active / Expired status display
 - Duplicate username protection
+- ✅ Per-User Rate Limiting — Set Download and Upload limits (in kbps) per user.
+- ✅ Billing & Accounting — Set Price, Notes, track MRR (Monthly Recurring Revenue), and view cumulative Collected payments.
+
 
 **Session Monitoring**
 - Live list of connected sessions: username, client IP, MAC, server IP, duration
 - **Force Offline** button to disconnect any session
 - Auto-refresh every 5 seconds
 - Kernel-sourced peer IP (accurate, not from stale cmdline)
+- ✅ Live Speed & Limits — View real-time upload/download speeds and the configured rate limits for each session.
+- ✅ Session vs. Lifetime Usage — View current session bytes and the total lifetime bytes downloaded/uploaded per user.
 
 **Firewall Automation**
 - "Show Preview" button — displays exact `uci` commands before applying
@@ -117,6 +128,7 @@ Existing OpenWrt PPPoE server tools fall into two categories:
 - Kills active PPP sessions for expired users
 - Flushes conntrack entries
 - Auto-unblocks renewed accounts
+- ✅ Usage Tracking Hooks — ip-up and ip-down hooks track exact session usage and commit it to the database when the client disconnects.
 
 ---
 
@@ -131,6 +143,14 @@ To function correctly, the app requires the following packages:
 - `conntrack` (for session cleanup)
 - `luci-base` (LuCI foundation)
 - `kmod-pppoe`, `kmod-pppox` (kernel modules — usually already present)
+- `tc-full` 
+- `kmod-sched-core` 
+- `kmod-sched-htb` 
+- `kmod-ifb` 
+
+
+
+
 
 **Architecture:** Universal. This package is `PKG_ARCH=all` — it contains only shell scripts, JavaScript, and ucode. No compiled binaries. Works on every OpenWrt architecture.
 
@@ -245,6 +265,8 @@ See [Compile from Source](#compile-from-source-openwrt-sdk) below.
 | `/usr/share/luci/menu.d/luci-app-pppoe-manager.json` | Menu entry |
 | `/usr/share/rpcd/acl.d/luci-app-pppoe-manager.json` | ACL permissions |
 
+| `/usr/bin/ppoemanager-ipup` | Session baseline & traffic shaping at connect |
+| `/usr/bin/ppoemanager-ipdown` | Session bytes commit at disconnect |
 ---
 
 ## Quick Start
@@ -272,6 +294,8 @@ Basic server configuration plus the Firewall Setup section.
 
 | Field | What it does |
 |-------|--------------|
+| Service Control (Start/Stop/Restart buttons) |
+| PPPoE Bridge Setup Wizard |
 | Enable Server | Turn the PPPoE server on or off |
 | Interface | UCI interface the server listens on |
 | AC Name | Access Concentrator name (cosmetic) |
@@ -291,7 +315,7 @@ Basic server configuration plus the Firewall Setup section.
 
 Table of all PPPoE accounts with **Add / Edit / Delete** and expiration dates.
 
-Accounts live in `/lib/ppp/ppp-users` (with expiration) and `/etc/ppp/chap-secrets` (credentials).
+Accounts live in `/lib/ppp/ppp-users` (with expiration) and `/etc/ppp/chap-secrets`  +  `/etc/ppp/pap-secrets ` (credentials).
 
 ### 3. Online Users
 
@@ -385,7 +409,7 @@ Shows every currently-connected PPPoE client with:
 
 ### Force Offline
 
-Sends `SIGKILL` to the `pppd` process for that session. The client is disconnected immediately. Useful for kicking abusive clients or forcing re-authentication.
+Sends SIGTERM (graceful PADT disconnect) followed by SIGKILL as a fallback for that session. The client reconnects in 5–10 seconds. The client is disconnected immediately. Useful for kicking abusive clients or forcing re-authentication.
 
 ---
 
@@ -570,15 +594,29 @@ They conflict. Only one can connect at a time. Edit each user and assign unique 
 
 See [CHANGELOG.md](CHANGELOG.md) for the full history.
 
-### [1.1.0-r5] — 2026-10-10 — First stable release
+### [1.1.0-r22] — 2026-10-24
+- **Per-User Rate Limiting:** Added bandwidth shaping (Download/Upload) per user using `tc` and `HTB`.
+- **Mi Router R3 Support:** Fixed swconfig bridge issues by resolving UCI devices dynamically.
+- **PAP/CHAP Sync:** Adding users now writes to both `chap-secrets` and `pap-secrets` for max compatibility.
 
+### [1.1.0-r20] — 2026-10-23
+- **Service Control:** Start, stop, restart, and enable/disable the server directly from the UI.
+- **PPPoE Bridge Wizard:** Automates creation of `br-pppoe` and DHCP isolation.
+- **Flow Offload Sync:** Offload buttons now accurately reflect the firewall state.
+
+### [1.1.0-r19] — 2026-10-13
+- **Live Speeds:** Added live upload/download rate tracking in Online Users.
+- **Usage Tracking:** Added `ip-up` and `ip-down` hooks for exact byte accounting.
+- **Session vs Lifetime:** Cleanly separated current session data from lifetime totals.
+- **Direction Labels:** Swapped Rx/Tx to Download/Upload for clarity.
+
+### [1.1.0-r5] — 2026-10-10 — First stable release
 - Five-tab interface (General Settings, Users Manager, Online Users, Advanced, Help)
 - Expanded Help tab with 13 collapsible documentation sections
 - Online Users parser rewritten — kernel-sourced peer IP, correct duration math, ~25ms response
 - Firewall Setup with preview, auto-backup, and restore
 - Tab persistence via localStorage
 - CI builds single universal IPK/APK (no arch duplication)
-
 ---
 
 ## Compile from Source (OpenWrt SDK)
@@ -664,6 +702,17 @@ Every tag push triggers a build. See `.github/workflows/build.yml` and `.github/
 | **DNS** | Domain Name System — names to IPs |
 | **AC** | Access Concentrator — your router (server side) |
 | **Session** | An active PPPoE connection |
+
+### Traffic Control & Rate Limiting
+
+| Term | Meaning |
+|------|---------|
+| **tc** | **Traffic Control.** A powerful Linux kernel utility used to configure packet scheduling, policing, and shaping. We use it to enforce the bandwidth limits you set per user. |
+| **HTB** | **Hierarchical Token Bucket.** The specific algorithm used by `tc`. It allows us to create a "bucket" of bandwidth (e.g., 2 Mbps) and strictly enforce that no user exceeds it, while allowing them to burst up to the limit when the network is idle. |
+| **ifb** | **Intermediate Functional Block.** A virtual network interface. Linux `tc` can easily shape *outbound* (egress) traffic. Because PPPoE client uploads come into the router *inbound*, we redirect their packets to `ifb0` so we can apply the HTB bandwidth limit before they reach the WAN. |
+| **qdisc** | **Queueing Discipline.** The mechanism inside the Linux kernel that decides how packets are queued and sent. Setting a `tc qdisc` is how we attach the rate limit to the interface. |
+| **egress** | Traffic leaving the router (e.g., Download traffic being sent *to* the PPPoE client). |
+| **ingress** | Traffic entering the router (e.g., Upload traffic coming *from* the PPPoE client). |
 
 ### OpenWrt ecosystem
 
