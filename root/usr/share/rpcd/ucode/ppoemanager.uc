@@ -46,7 +46,7 @@ function write_meta(meta) {
     const lines = [];
     for (let u in meta) {
         const m = meta[u];
-        push(lines, `${u}|${m.price || ''}|${m.notes || ''}|${m.first_seen || ''}|${m.last_seen || ''}|${m.sessions || '0'}|${m.total_seconds || '0'}|${m.total_paid || '0'}|${m.total_rx || '0'}|${m.total_tx || '0'}`);
+        push(lines, `${u}|${m.price || ''}|${m.notes || ''}|${m.first_seen || ''}|${m.last_seen || ''}|${m.sessions || '0'}|${m.total_seconds || '0'}|${m.total_paid || '0'}|${m.total_rx || '0'}|${m.total_tx || '0'}|${m.dl_rate || ''}|${m.ul_rate || ''}`);
     }
     const tmp = META_FILE + '.tmp';
     system(`: > ${tmp}`);
@@ -319,7 +319,7 @@ const methods = {
                     if (!meta[user]) {
                         meta[user] = { user: user, price: '', notes: '', first_seen: '', last_seen: '',
                                        sessions: '0', total_seconds: '0', total_paid: '0',
-                                       total_rx: '0', total_tx: '0' };
+                                       total_rx: '0', total_tx: '0', dl_rate: '', ul_rate: '' };
                     }
                     const m = meta[user];
                     m.total_rx = "" + (int(m.total_rx) + cur_rx);
@@ -652,6 +652,7 @@ const methods = {
             const id = length(p) == 4 ? p[3] : '0';
             system(`echo '${expiry}|${userClean}|${passwd}|${ipaddr}|${id}' >> ${DB_FILE}`);
             system(`echo '${userClean} * ${passwd} ${ipaddr}' >> ${SECRETS_FILE}`);
+            system(`echo '${userClean} * ${passwd} ${ipaddr}' >> ${PAP_SECRETS_FILE}`);
             system('/etc/init.d/ppoemanager restart >/dev/null 2>&1 &');
             return { result: true };
         }
